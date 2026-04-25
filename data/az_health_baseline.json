@@ -1,0 +1,41 @@
+{
+  "_source": "CDC HHS Region definitions — https://www.hhs.gov/about/agencies/iea/regional-offices/index.html",
+  "_note": "AZ is in HHS Region 9. Live ILI rates fetched from CDC FluView Delphi API at runtime.",
+  "_hhs_region_9": "Arizona, California, Hawaii, Nevada, and Pacific territories",
+  "Pima": {
+    "hhs_region": "9",
+    "notes": "Home of University of Arizona — high young adult density increases transmission velocity"
+  },
+  "Maricopa": {
+    "hhs_region": "9",
+    "notes": "Largest county in AZ by population — Phoenix metro, multiple major hospital networks"
+  },
+  "Cochise": {
+    "hhs_region": "9",
+    "notes": "Rural county, US-Mexico border — limited healthcare access, cross-border travel exposure"
+  },
+  "Yavapai": {
+    "hhs_region": "9",
+    "notes": "Older median age population — higher vulnerability to respiratory illness"
+  },
+  "Coconino": {
+    "hhs_region": "9",
+    "notes": "Grand Canyon tourism creates variable travel exposure from international visitors"
+  },
+  "Pinal": {
+    "hhs_region": "9",
+    "notes": "Fast-growing corridor between Phoenix and Tucson metro areas"
+  },
+  "Navajo": {
+    "hhs_region": "9",
+    "notes": "Significant tribal communities — historically limited healthcare infrastructure"
+  },
+  "Apache": {
+    "hhs_region": "9",
+    "notes": "Remote rural county — very limited healthcare access"
+  },
+  "default": {
+    "hhs_region": "9",
+    "notes": "Rural Arizona county in HHS Region 9"
+  }
+}
