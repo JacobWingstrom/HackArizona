@@ -2,7 +2,10 @@ import sqlite3
 import json
 import os
 import random
+import math
 from datetime import datetime, timedelta
+from county_data import COUNTY_DATA
+from us_counties_seed import US_COUNTIES, STATE_SICK_RATES, sick_rate, daily_count
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'reports.db')
 
@@ -55,6 +58,7 @@ def init_db():
     for migration in [
         'ALTER TABLE reports ADD COLUMN is_demo INTEGER DEFAULT 0',
         'ALTER TABLE reports ADD COLUMN user_id INTEGER',
+        'ALTER TABLE reports ADD COLUMN fips TEXT',
     ]:
         try:
             c.execute(migration)
@@ -109,23 +113,53 @@ def get_reports_by_county(county, days=14):
     conn.close()
     return rows
 
+def _make_sick_pattern(pop):
+    """Generate a 7-day growing sick count proportional to county population."""
+    peak = max(1, round(pop / 600000))
+    # Ramp up over 7 days: start ~40% of peak, end at peak
+    return [max(0, round(peak * f)) for f in [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
+
+
+def _make_healthy_pattern(pop):
+    """Generate a 7-day stable healthy count proportional to county population."""
+    daily = max(1, round(pop / 400000))
+    return [daily] * 7
+
+
+# Counties designated as "healthy-majority" for demo variety (zip codes)
+_HEALTHY_ZIPS = {
+    "98101",  # King, WA (Seattle)
+    "80202",  # Denver, CO
+    "02101",  # Middlesex, MA (Boston area)
+    "97201",  # Multnomah, OR (Portland)
+    "55401",  # Hennepin, MN (Minneapolis)
+    "27601",  # Wake, NC (Raleigh)
+    "80901",  # El Paso, CO (Colorado Springs)
+    "23451",  # Virginia Beach, VA
+    "05401",  # Chittenden, VT
+    "96813",  # Honolulu, HI
+    "83702",  # Ada, ID (Boise)
+    "58102",  # Cass, ND (Fargo)
+    "57101",  # Minnehaha, SD (Sioux Falls)
+    "82001",  # Laramie, WY (Cheyenne)
+    "25301",  # Kanawha, WV (Charleston)
+}
+
+
 def seed_demo_data():
     """
-    Insert realistic demo reports across AZ counties.
-    All rows are flagged is_demo=1 so they can be wiped cleanly.
-    Pattern: Pima County has a growing cluster; Maricopa is stable; others are low.
-    """
-    # (county, zip, daily counts for days -6 through -0)
-    patterns = [
-        ("Pima",      "85721", [8, 12, 18, 27, 41, 47, 52]),   # growing cluster
-        ("Maricopa",  "85001", [15, 14, 16, 15, 17, 16, 15]),  # stable moderate
-        ("Pinal",     "85120", [3,  2,  4,  3,  2,  3,  2]),   # low
-        ("Cochise",   "85601", [1,  0,  2,  1,  0,  1,  2]),   # sparse
-        ("Yavapai",   "86301", [2,  3,  2,  4,  3,  2,  3]),   # low
-        ("Navajo",    "85901", [0,  1,  0,  1,  2,  1,  0]),   # minimal
-        ("Coconino",  "86001", [1,  2,  1,  0,  1,  2,  1]),   # minimal
-    ]
+    Seed ~500 US counties with realistic population-proportional, regionally-tuned
+    sick/healthy reports over the past 7 days.  All rows have is_demo=1.
 
+    Regional sick rates (STATE_SICK_RATES) reflect a late-April scenario:
+      Southeast: active spring flu wave (0.62-0.70)
+      Northeast/Midwest: moderate urban spread (0.48-0.62)
+      Mountain West / Pacific NW: low (0.24-0.32)
+
+    Temporal shape:
+      Outbreak states (rate > 0.55): growing curve over 7 days
+      Stable states:                 flat with ±10% daily noise
+    """
     symptom_pools = [
         ["fever", "cough"],
         ["fever", "fatigue", "headache"],
@@ -134,50 +168,74 @@ def seed_demo_data():
         ["fatigue", "headache"],
         ["nausea", "fatigue"],
         ["fever", "loss_of_smell_taste", "fatigue"],
+        ["body_aches", "chills"],
+        ["runny_nose", "sore_throat", "fatigue"],
     ]
     age_groups = ["adult"] * 6 + ["elderly"] * 3 + ["child"] * 1
+
+    # Outbreak growth multipliers (day -6 → day 0)
+    GROWTH_CURVE   = [0.55, 0.65, 0.73, 0.82, 0.90, 0.96, 1.00]
+    STABLE_CURVE   = [0.90, 1.05, 0.95, 1.00, 1.10, 0.95, 1.00]
+    DECLINING_CURVE= [1.00, 0.96, 0.90, 0.82, 0.73, 0.65, 0.55]
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     today = datetime.now().date()
     inserted = 0
 
-    for county, zip_code, daily_counts in patterns:
-        for days_ago, count in enumerate(reversed(daily_counts)):
-            day = today - timedelta(days=days_ago)
-            for _ in range(count):
-                # Scatter timestamps throughout the day
-                hour = random.randint(6, 22)
-                minute = random.randint(0, 59)
-                ts = datetime.combine(day, datetime.min.time()).replace(
-                    hour=hour, minute=minute
-                )
-                symptoms = random.choice(symptom_pools)
-                age = random.choice(age_groups)
-                hh = random.randint(1, 4)
-                sick_hh = random.randint(0, min(hh - 1, 2))
-                c.execute('''
-                    INSERT INTO reports (
-                        timestamp, zip_code, county, feeling, symptoms, age_group,
-                        household_members, sick_household_members,
-                        first_time_reporting, recent_travel, event_attendance,
-                        animal_contact, sick_animals, water_concerns,
-                        reporting_to_authority, is_demo
-                    ) VALUES (?, ?, ?, 'sick', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                ''', (
-                    ts.isoformat(),
-                    zip_code, county,
-                    json.dumps(symptoms), age,
-                    hh, sick_hh,
-                    random.randint(0, 1),
-                    random.randint(0, 1),
-                    random.randint(0, 1),
-                    random.randint(0, 1),
-                    0,
-                    random.randint(0, 1),
-                    random.randint(0, 1),
-                ))
-                inserted += 1
+    for (fips, county_name, state, pop) in US_COUNTIES:
+        sr = sick_rate(state)             # per-county rate with regional noise
+        base = daily_count(pop)           # base daily reports (sick + healthy)
+
+        outbreak = sr > 0.55
+        declining = sr < 0.32             # mountain west / PNW declining trend
+        curve = GROWTH_CURVE if outbreak else (DECLINING_CURVE if declining else STABLE_CURVE)
+
+        for day_offset, multiplier in enumerate(curve):
+            day = today - timedelta(days=(6 - day_offset))
+            # Natural day-of-week effect: weekends ~20% fewer reports
+            dow_factor = 0.82 if day.weekday() >= 5 else 1.0
+            total_today = max(1, round(base * multiplier * dow_factor))
+
+            sick_today    = max(0, round(total_today * sr))
+            healthy_today = max(0, total_today - sick_today)
+
+            for feeling, count in [("sick", sick_today), ("healthy", healthy_today)]:
+                for _ in range(count):
+                    hour   = random.randint(6, 22)
+                    minute = random.randint(0, 59)
+                    ts = datetime.combine(day, datetime.min.time()).replace(
+                        hour=hour, minute=minute
+                    )
+                    symptoms = random.choice(symptom_pools) if feeling == "sick" else []
+                    age  = random.choice(age_groups)
+                    hh   = random.randint(1, 4)
+                    sick_hh = random.randint(0, min(hh - 1, 2)) if feeling == "sick" else 0
+                    c.execute('''
+                        INSERT INTO reports (
+                            timestamp, zip_code, county, feeling, symptoms, age_group,
+                            household_members, sick_household_members,
+                            first_time_reporting, recent_travel, event_attendance,
+                            animal_contact, sick_animals, water_concerns,
+                            reporting_to_authority, is_demo, fips
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                    ''', (
+                        ts.isoformat(),
+                        fips,           # use fips as zip placeholder for demo rows
+                        county_name,
+                        feeling,
+                        json.dumps(symptoms), age,
+                        hh, sick_hh,
+                        random.randint(0, 1),
+                        1 if (outbreak and random.random() < 0.3) else 0,
+                        random.randint(0, 1),
+                        random.randint(0, 1),
+                        0,
+                        random.randint(0, 1),
+                        random.randint(0, 1),
+                        fips,
+                    ))
+                    inserted += 1
 
     conn.commit()
     conn.close()

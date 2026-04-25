@@ -56,3 +56,8 @@ export const getLeaderboard = async () => {
   const r = await axios.get('/api/leaderboard', { headers: authHeader() });
   return r.data;
 };
+
+export const getUSMap = async () => {
+  const r = await axios.get('/api/us-map');
+  return r.data;
+};

@@ -15,6 +15,7 @@ from database import (
     update_user_streak, add_friend, remove_friend, get_friends, get_user_stats,
 )
 from forecast import detect_cluster, get_community_risk_map
+from county_data import COUNTY_DATA
 
 load_dotenv()
 
@@ -480,6 +481,61 @@ def checkin(current_user):
 @app.route("/api/community-risk", methods=["GET"])
 def community_risk():
     return jsonify(get_community_risk_map())
+
+
+@app.route("/api/us-map", methods=["GET"])
+def us_map():
+    import sqlite3
+    from database import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Group rows that have a fips field directly (demo data)
+    cursor.execute("""
+        SELECT fips, county, feeling
+        FROM reports
+        WHERE fips IS NOT NULL AND fips != ''
+    """)
+    fips_rows = cursor.fetchall()
+
+    # Also handle real user reports (fips null, look up via zip→county_data)
+    cursor.execute("""
+        SELECT zip_code, county, feeling
+        FROM reports
+        WHERE (fips IS NULL OR fips = '') AND zip_code IS NOT NULL
+    """)
+    zip_rows = cursor.fetchall()
+    conn.close()
+
+    # Build a FIPS-keyed map from county_data for metadata enrichment
+    fips_meta = {v[5]: v for v in COUNTY_DATA.values()}  # fips → (name,state,lat,lon,pop,fips)
+
+    result = {}
+
+    def add(fips, county_label, feeling):
+        if fips not in result:
+            meta = fips_meta.get(fips)
+            result[fips] = {
+                "fips":    fips,
+                "county":  meta[0] if meta else county_label,
+                "state":   meta[1] if meta else "",
+                "lat":     meta[2] if meta else None,
+                "lon":     meta[3] if meta else None,
+                "pop":     meta[4] if meta else 0,
+                "total": 0, "sick": 0, "healthy": 0,
+            }
+        result[fips]["total"] += 1
+        result[fips]["sick" if feeling == "sick" else "healthy"] += 1
+
+    for fips, county, feeling in fips_rows:
+        add(fips, county, feeling)
+
+    for zip_code, county, feeling in zip_rows:
+        meta = COUNTY_DATA.get(zip_code)
+        if meta and meta[5]:
+            add(meta[5], county, feeling)
+
+    return jsonify(list(result.values()))
 
 
 @app.route("/api/demo/seed", methods=["POST"])

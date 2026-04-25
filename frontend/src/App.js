@@ -6,6 +6,7 @@ import WellnessMode from './components/WellnessMode';
 import AuthScreen from './components/AuthScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ProfileScreen from './components/ProfileScreen';
+import USMapScreen from './components/USMapScreen';
 import './index.css';
 
 function App() {
@@ -41,6 +42,13 @@ function App() {
             CommunityPulse
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={() => setView('usmap')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}
+              title="US Symptom Map"
+            >
+              🗺️
+            </button>
             {currentUser ? (
               <>
                 <button
@@ -109,6 +117,9 @@ function App() {
             currentUser={currentUser}
             setCurrentUser={setCurrentUser}
           />
+        )}
+        {view === 'usmap' && (
+          <USMapScreen setView={setView} />
         )}
         {view === 'leaderboard' && (
           <LeaderboardScreen currentUser={currentUser} setView={setView} />
