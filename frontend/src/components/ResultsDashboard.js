@@ -430,7 +430,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
       <ForecastChart chartData={chart_data} forecast={forecast} trendPct={trend_pct} />
 
       {/* ── Audio ────────────────────────────────────────────────────── */}
-      {(ai_pending || audio_url) && (
+      {(merged.ai_pending || audio_url) && (
         <Section title="🎧 Listen to Your Assessment" titleColor="#2A9D8F">
           {audio_url ? (
             <audio controls autoPlay src={audio_url} style={{ width: '100%', borderRadius: 8 }}>
