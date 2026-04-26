@@ -13,7 +13,7 @@ import uuid
 
 from database import (
     DB_PATH,
-    init_db, save_report, zip_to_county, seed_demo_data, seed_new_england_outbreak, clear_demo_data, get_demo_status,
+    init_db, save_report, zip_to_county, seed_demo_data, seed_new_england_outbreak, seed_southern_az_outbreak, clear_demo_data, get_demo_status,
     init_users_db, create_user, get_user_by_email, get_user_by_id, get_user_by_username,
     update_user_streak, add_friend, remove_friend, get_friends, get_user_stats,
 )
@@ -401,18 +401,25 @@ def text_to_speech(text):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {"xi-api-key": key, "Content-Type": "application/json"}
         body = {
-            "text": text,
-            "model_id": "eleven_monolingual_v1",
+            "text": text[:500],  # ElevenLabs free tier limit
+            "model_id": "eleven_turbo_v2_5",
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
         }
-        r = requests.post(url, json=body, headers=headers, timeout=15)
+        r = requests.post(url, json=body, headers=headers, timeout=20)
         if r.status_code == 200:
-            path = "static/audio/output.mp3"
+            import time
+            fname = f"output_{int(time.time())}.mp3"
+            audio_dir = os.path.join(os.path.dirname(__file__), "static", "audio")
+            os.makedirs(audio_dir, exist_ok=True)
+            path = os.path.join(audio_dir, fname)
             with open(path, "wb") as f:
                 f.write(r.content)
-            return "/static/audio/output.mp3"
-    except Exception:
-        pass
+            print(f"[TTS] Generated: {fname}")
+            return f"/static/audio/{fname}"
+        else:
+            print(f"ElevenLabs error {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"TTS exception: {e}")
     return None
 
 
@@ -804,6 +811,8 @@ def checkin(current_user):
             {"tip": "Eat small, easy-to-digest meals.", "category": "nutrition"},
             {"tip": "Seek care if you develop difficulty breathing, persistent chest pain, or high fever above 103°F.", "category": "when to seek care"},
         ]
+        recommendation_text = (ai_result or {}).get("recommendation", "")
+        audio_url = text_to_speech(recommendation_text) if recommendation_text else None
         with _AI_JOBS_LOCK:
             _AI_JOBS[jid] = {
                 "status": "done",
@@ -811,11 +820,12 @@ def checkin(current_user):
                     "recommendations": recs,
                     "self_care_tips": tips,
                     "risk_level":     (ai_result or {}).get("risk_level"),
-                    "recommendation": (ai_result or {}).get("recommendation"),
+                    "recommendation": recommendation_text,
                     "notify_others":  (ai_result or {}).get("notify_others"),
                     "notify_message": (ai_result or {}).get("notify_message"),
                     "ai_explanation": (ai_result or {}).get("ai_explanation"),
                     "wellness_tip":   (ai_result or {}).get("wellness_tip"),
+                    "audio_url":      audio_url,
                     "ai_pending": False,
                 }
             }
@@ -1415,6 +1425,16 @@ def county_detail(target_fips):
     daily = [{"date": r[0], "sick": r[1], "total": r[2]} for r in c.fetchall()]
 
     c.execute("""
+        SELECT date(timestamp) as day,
+               COUNT(*) as total,
+               SUM(CASE WHEN feeling='sick' THEN 1 ELSE 0 END) as sick
+        FROM reports
+        WHERE fips = ? AND timestamp >= datetime('now', '-30 days')
+        GROUP BY day ORDER BY day
+    """, (target_fips,))
+    daily_30d = [{"date": r[0], "total": r[1], "sick": r[2]} for r in c.fetchall()]
+
+    c.execute("""
         SELECT fips, COUNT(*) FROM reports
         WHERE feeling = 'sick' AND fips IS NOT NULL AND fips != ''
           AND fips != ? AND timestamp >= datetime('now', '-7 days')
@@ -1464,6 +1484,24 @@ def county_detail(target_fips):
         "water_concerns":         sum(1 for r in rows_7d if r.get("water_concerns")),
         "flooding":               sum(1 for r in rows_7d if r.get("flooding")),
         "reporting_to_authority": sum(1 for r in rows_7d if r.get("reporting_to_authority")),
+    }
+
+    # ── Household Secondary Attack Rate ───────────────────────────────────────
+    hh_exposed   = sum(max(r.get("household_members", 1) - 1, 0) for r in sick_rows)
+    hh_secondary = sum(r.get("sick_household_members", 0) for r in sick_rows)
+    household_sar = {
+        "pct":               round(hh_secondary / hh_exposed * 100) if hh_exposed > 0 else None,
+        "secondary_cases":   hh_secondary,
+        "exposed_contacts":  hh_exposed,
+        "reports_with_data": sum(1 for r in sick_rows if r.get("household_members", 1) > 1),
+    }
+
+    # ── Animal Health Signal ───────────────────────────────────────────────────
+    sick_animals_count = sum(r.get("sick_animals", 0) for r in rows_7d)
+    animal_health = {
+        "animal_contact_reports": rf["animal_contact"],
+        "sick_animals_reported":  sick_animals_count,
+        "zoonotic_signal":        rf["animal_contact"] > 0 or sick_animals_count > 0,
     }
 
     travel = get_inbound_sources(target_fips, sick_by_fips)
@@ -1641,13 +1679,16 @@ Current: {weather_str}
             "trend_pct":  trend_pct,
             "prior_week": prior_count,
             "daily":      daily,
+            "daily_30d":  daily_30d,
         },
         "symptoms":        symptoms_list,
         "age_groups":      dict(age_counter),
         "risk_factors":    rf,
+        "household_sar":   household_sar,
+        "animal_health":   animal_health,
         "travel":          travel,
-        "weather":         weather,   # available immediately (cached)
-        "fluview":         "",        # filled in when ai_job completes
+        "weather":         weather,
+        "fluview":         "",
         "epicore":         "",
         "beacon":          "",
         "neighbor_spread": neighbor_spread,
@@ -1667,6 +1708,12 @@ def demo_seed():
 def demo_seed_new_england():
     count = seed_new_england_outbreak()
     return jsonify({"seeded": count, "demo_active": True, "scenario": "new_england_outbreak"})
+
+
+@app.route("/api/demo/seed-southern-az", methods=["POST"])
+def demo_seed_southern_az():
+    count = seed_southern_az_outbreak()
+    return jsonify({"seeded": count, "demo_active": True, "scenario": "southern_az_outbreak"})
 
 
 @app.route("/api/demo/clear", methods=["POST"])

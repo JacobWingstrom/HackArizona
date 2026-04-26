@@ -287,6 +287,10 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
       <button type="submit" className="btn btn-primary" disabled={loading}>
         Analyze My Risk →
       </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, color: '#9CA3AF', fontSize: '0.73rem' }}>
+        <span>🔒</span>
+        <span>Anonymous by default · County-level only · No data sold · AI runs locally</span>
+      </div>
       <button
         type="button"
         className="btn btn-secondary mt-8"

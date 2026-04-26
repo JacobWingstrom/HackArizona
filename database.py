@@ -478,6 +478,171 @@ def seed_new_england_outbreak():
     return inserted
 
 
+def seed_southern_az_outbreak():
+    """
+    Seed a realistic cross-border respiratory illness wave across Southern Arizona.
+
+    Scenario: A novel respiratory illness enters through the Nogales port of entry in
+    Santa Cruz County ~4 weeks ago, spreads east to Cochise, west to Yuma, and north
+    into Pima (Tucson metro), Pinal, and rural Graham County.
+
+    Demonstrates how CommunityPulse detects outbreaks in rural/border communities
+    with limited healthcare access — the counties that need early warning most.
+    """
+    # (fips, county, state, pop, tier)
+    # tier 0 = epicentre (Santa Cruz border crossing), tier 1 = border spread,
+    # tier 2 = metro spillover, tier 3 = northward emerging
+    AZ_COUNTIES = [
+        # Santa Cruz — epicentre, Nogales port of entry
+        ("04023", "Santa Cruz", "AZ", 47420,   0),
+        # Yuma — western border, San Luis port of entry
+        ("04027", "Yuma",       "AZ", 213787,  1),
+        # Cochise — eastern border, cross-border exposure
+        ("04003", "Cochise",    "AZ", 125922,  1),
+        # Graham — rural mining county, limited healthcare
+        ("04009", "Graham",     "AZ", 37532,   1),
+        # Pima — Tucson metro spillover
+        ("04019", "Pima",       "AZ", 1059501, 2),
+        # Pinal — northward corridor spread
+        ("04021", "Pinal",      "AZ", 425264,  2),
+        # La Paz — small western rural county
+        ("04012", "La Paz",     "AZ", 22113,   3),
+        # Maricopa — distant Phoenix metro, minimal
+        ("04013", "Maricopa",   "AZ", 4485448, 3),
+    ]
+
+    # Background national counties at low baseline so AZ cluster stands out
+    BACKGROUND_COUNTIES = [
+        ("06037", "Los Angeles",  "CA", 9829544, 4),
+        ("06073", "San Diego",    "CA", 3298634, 4),
+        ("48201", "Harris",       "TX", 4731145, 4),
+        ("17031", "Cook",         "IL", 5150233, 4),
+        ("36061", "New York",     "NY", 1576876, 4),
+        ("53033", "King",         "WA", 2269675, 4),
+        ("25025", "Suffolk",      "MA", 797936,  4),
+        ("12086", "Miami-Dade",   "FL", 2716940, 4),
+        ("48113", "Dallas",       "TX", 2613539, 4),
+        ("42101", "Philadelphia", "PA", 1576251, 4),
+    ]
+
+    symptom_pools_respiratory = [
+        ["Fever", "Cough / Congestion", "Fatigue"],
+        ["Fever", "Difficulty Breathing", "Cough / Congestion"],
+        ["Fever", "Muscle or Body Aches and Pains", "Headache"],
+        ["Cough / Congestion", "Sore Throat", "Runny or Stuffy Nose"],
+        ["Fever", "Loss of Smell or Taste", "Fatigue"],
+        ["Fever", "Chills", "Muscle or Body Aches and Pains"],
+        ["Fatigue", "Headache", "Fever"],
+    ]
+    symptom_pools_mild = [
+        ["Cough / Congestion", "Fatigue"],
+        ["Headache", "Fatigue"],
+        ["Runny or Stuffy Nose", "Sore Throat"],
+    ]
+    age_groups = ["adult"] * 5 + ["elderly"] * 3 + ["child"] * 2
+
+    # Growth curves indexed 0..29 (day 29 = today)
+    EXPLOSIVE = [
+        0.04, 0.06, 0.09, 0.12, 0.16, 0.21, 0.27, 0.34, 0.42, 0.51,
+        0.61, 0.70, 0.78, 0.85, 0.90, 0.93, 0.95, 0.97, 0.98, 0.99,
+        1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,
+    ]
+    RAPID = [
+        0.00, 0.00, 0.00, 0.00, 0.03, 0.06, 0.10, 0.15, 0.21, 0.28,
+        0.36, 0.45, 0.54, 0.63, 0.71, 0.78, 0.84, 0.89, 0.93, 0.96,
+        0.97, 0.98, 0.99, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,
+    ]
+    GROWING = [
+        0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.02, 0.04, 0.07,
+        0.11, 0.16, 0.22, 0.29, 0.37, 0.46, 0.55, 0.64, 0.72, 0.79,
+        0.85, 0.90, 0.93, 0.95, 0.97, 0.98, 0.99, 1.00, 1.00, 1.00,
+    ]
+    EMERGING = [
+        0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,
+        0.00, 0.00, 0.01, 0.03, 0.06, 0.10, 0.15, 0.21, 0.28, 0.36,
+        0.45, 0.54, 0.63, 0.71, 0.78, 0.83, 0.87, 0.91, 0.94, 0.96,
+    ]
+    BACKGROUND = [0.12] * 30
+
+    CURVES    = [EXPLOSIVE, RAPID, GROWING, EMERGING, BACKGROUND]
+    SICK_RATES = [0.72, 0.58, 0.38, 0.28, 0.10]
+
+    def base_daily(pop):
+        if pop > 1_000_000: return 12
+        if pop > 500_000:   return 7
+        if pop > 200_000:   return 5
+        if pop > 100_000:   return 3
+        if pop > 50_000:    return 2
+        return 1
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = datetime.now().date()
+    inserted = 0
+
+    all_counties = [(fips, county, state, pop, tier) for (fips, county, state, pop, tier) in AZ_COUNTIES] + \
+                   [(fips, county, state, pop, tier) for (fips, county, state, pop, tier) in BACKGROUND_COUNTIES]
+
+    for (fips, county_name, state, pop, tier) in all_counties:
+        curve   = CURVES[min(tier, 4)]
+        sr      = SICK_RATES[min(tier, 4)]
+        base    = base_daily(pop)
+        is_border = tier <= 1
+        symp_pool = symptom_pools_respiratory if tier <= 2 else symptom_pools_mild
+
+        for day_offset, multiplier in enumerate(curve):
+            if multiplier == 0.00:
+                continue
+
+            day = today - timedelta(days=(29 - day_offset))
+            dow_factor = 0.80 if day.weekday() >= 5 else 1.0
+            total_today = max(1, round(base * multiplier * dow_factor))
+            sick_today    = max(0, round(total_today * sr))
+            healthy_today = max(0, total_today - sick_today)
+
+            for feeling, count in [("sick", sick_today), ("healthy", healthy_today)]:
+                for _ in range(count):
+                    hour   = random.randint(6, 22)
+                    minute = random.randint(0, 59)
+                    ts = datetime.combine(day, datetime.min.time()).replace(
+                        hour=hour, minute=minute
+                    )
+                    symptoms = random.choice(symp_pool) if feeling == "sick" else []
+                    age  = random.choice(age_groups)
+                    hh   = random.randint(1, 5)
+                    sick_hh = random.randint(1, min(hh, 3)) if feeling == "sick" and tier <= 1 else (
+                        random.randint(0, min(hh - 1, 2)) if feeling == "sick" else 0
+                    )
+                    # Border counties have high recent_travel (cross-border commuters)
+                    recent_travel = 1 if (is_border and random.random() < 0.55) else (
+                        1 if (tier == 2 and random.random() < 0.20) else 0
+                    )
+                    c.execute('''
+                        INSERT INTO reports (
+                            timestamp, zip_code, county, feeling, symptoms, age_group,
+                            household_members, sick_household_members,
+                            first_time_reporting, recent_travel, event_attendance,
+                            animal_contact, sick_animals, water_concerns,
+                            reporting_to_authority, is_demo, fips
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                    ''', (
+                        ts.isoformat(), fips, county_name, feeling,
+                        json.dumps(symptoms), age, hh, sick_hh,
+                        random.randint(0, 1),
+                        recent_travel,
+                        1 if (tier <= 1 and random.random() < 0.30) else 0,
+                        1 if (is_border and random.random() < 0.15) else 0,  # animal contact higher in rural AZ
+                        0, 0,
+                        1 if (tier <= 2 and random.random() < 0.35) else 0,
+                        fips,
+                    ))
+                    inserted += 1
+
+    conn.commit()
+    conn.close()
+    return inserted
+
+
 def clear_demo_data():
     """Remove all rows flagged as demo data."""
     conn = sqlite3.connect(DB_PATH)

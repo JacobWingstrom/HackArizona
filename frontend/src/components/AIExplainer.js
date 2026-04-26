@@ -227,8 +227,8 @@ export default function AIExplainer({ explanation, reportCount, county, whoAlert
                   },
                   {
                     icon: '🔒',
-                    title: 'Privacy',
-                    body: 'All data is anonymized and aggregated. No individual report can be re-identified. Gemma runs locally — health data never leaves the server.',
+                    title: 'Your privacy is protected by design',
+                    body: 'No account required — anyone can submit anonymously. We collect county-level location only (never street address or GPS). Reports contain no name, email, phone, or device identifier. All data is aggregated before analysis — no individual report can be re-identified. AI inference runs on our local server; your health data never reaches a third-party AI provider. We do not sell, share, or monetize any data.',
                   },
                 ].map((item, i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>

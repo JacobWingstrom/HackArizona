@@ -34,6 +34,22 @@
     "hhs_region": "9",
     "notes": "Remote rural county — very limited healthcare access"
   },
+  "Santa Cruz": {
+    "hhs_region": "9",
+    "notes": "Smallest AZ county by area — highest border crossing density in the state. Nogales port of entry processes 4M+ crossings annually. Limited hospital capacity; nearest trauma center is in Tucson (65 miles). High cross-border disease transmission risk."
+  },
+  "Yuma": {
+    "hhs_region": "9",
+    "notes": "Agricultural and border hub — San Luis port of entry is one of the busiest commercial crossings in the US. Large seasonal migrant farmworker population with limited healthcare access. Sparse clinic coverage outside the city of Yuma."
+  },
+  "Graham": {
+    "hhs_region": "9",
+    "notes": "Rural mining and ranching county — nearest hospital is 45+ miles for most residents. Limited primary care providers. High occupational exposure risk in mining and agricultural communities."
+  },
+  "La Paz": {
+    "hhs_region": "9",
+    "notes": "Remote western AZ county — sparsely populated, large geographic area. Limited healthcare infrastructure; residents often travel to Yuma or Phoenix for specialty care."
+  },
   "default": {
     "hhs_region": "9",
     "notes": "Rural Arizona county in HHS Region 9"

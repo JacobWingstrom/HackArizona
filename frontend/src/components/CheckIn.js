@@ -11,16 +11,274 @@ function getStreak() {
   return 0;
 }
 
+const RISK_COLOR = { low: '#059669', medium: '#D97706', high: '#EA580C', critical: '#DC2626' };
+const RISK_LABEL = { low: 'LOW', medium: 'MODERATE', high: 'HIGH', critical: 'CRITICAL' };
+
+// ── County Update Brief ──────────────────────────────────────────────────────
+
+function CountyUpdateBrief({ update, onDismiss }) {
+  const changed = update.prevRisk !== update.currentRisk;
+  const trendDir = update.currentTrend > update.prevTrend ? 'up' : 'down';
+  const trendDelta = Math.abs(update.currentTrend - update.prevTrend);
+
+  return (
+    <div style={{
+      background: '#EFF6FF', border: '1.5px solid #BFDBFE',
+      borderRadius: 12, padding: '14px 16px', marginBottom: 4,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <div style={{ color: '#1E40AF', fontWeight: 700, fontSize: '0.82rem' }}>
+          📍 {update.county} County Update · {update.daysSince} day{update.daysSince !== 1 ? 's' : ''} since your last check-in
+        </div>
+        <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: '#9CA3AF', fontSize: '0.9rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}>✕</button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {changed && (
+          <div style={{ fontSize: '0.78rem', color: '#374151' }}>
+            Community risk:
+            {' '}<span style={{ color: RISK_COLOR[update.prevRisk] || '#6B7280', fontWeight: 700 }}>{RISK_LABEL[update.prevRisk] || update.prevRisk}</span>
+            {' '}→{' '}
+            <span style={{ color: RISK_COLOR[update.currentRisk] || '#6B7280', fontWeight: 700 }}>{RISK_LABEL[update.currentRisk] || update.currentRisk}</span>
+          </div>
+        )}
+        {trendDelta >= 10 && (
+          <div style={{ fontSize: '0.78rem', color: '#374151' }}>
+            Reports {trendDir} <span style={{ fontWeight: 700, color: trendDir === 'up' ? '#DC2626' : '#059669' }}>+{trendDelta}%</span>
+          </div>
+        )}
+        {!changed && trendDelta < 10 && (
+          <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>No significant changes since your last visit.</div>
+        )}
+      </div>
+      <div style={{ color: '#6B7280', fontSize: '0.68rem', marginTop: 6 }}>
+        Check in today to see your updated personal risk assessment
+      </div>
+    </div>
+  );
+}
+
+// ── Onboarding Modal ─────────────────────────────────────────────────────────
+
+const PERSONAS = [
+  { id: 'student',  label: 'Student',        icon: '🎓', desc: 'Campus & school health' },
+  { id: 'parent',   label: 'Parent',         icon: '👨‍👩‍👧', desc: 'Family & school outbreaks' },
+  { id: 'elderly',  label: 'Senior',         icon: '🏥', desc: 'Higher-risk monitoring' },
+  { id: 'adult',    label: 'General Public', icon: '👤', desc: 'Community surveillance' },
+];
+
+function OnboardingModal({ onComplete }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '0 16px',
+    }}>
+      <div style={{
+        background: '#FFFFFF', borderRadius: 18, padding: '28px 24px',
+        maxWidth: 420, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div style={{ fontSize: '2rem', marginBottom: 8 }}>🌡️</div>
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#1F2937', marginBottom: 6 }}>
+            Welcome to CommunityPulse
+          </div>
+          <div style={{ color: '#6B7280', fontSize: '0.82rem', lineHeight: 1.5 }}>
+            Who are you? We'll personalize your health alerts and outbreak guidance.
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          {PERSONAS.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onComplete(p.id)}
+              style={{
+                background: '#F9FAFB', border: '1.5px solid #E5E7EB', borderRadius: 12,
+                padding: '14px 10px', cursor: 'pointer', textAlign: 'center',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#2C5282';
+                e.currentTarget.style.background = 'rgba(44,82,130,0.05)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '#E5E7EB';
+                e.currentTarget.style.background = '#F9FAFB';
+              }}
+            >
+              <div style={{ fontSize: '1.6rem', marginBottom: 4 }}>{p.icon}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1F2937', marginBottom: 2 }}>{p.label}</div>
+              <div style={{ color: '#9CA3AF', fontSize: '0.67rem' }}>{p.desc}</div>
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => onComplete('adult')}
+          style={{
+            width: '100%', background: 'none', border: 'none',
+            color: '#9CA3AF', fontSize: '0.74rem', cursor: 'pointer',
+            padding: '6px', textDecoration: 'underline',
+          }}
+        >
+          Skip for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Recovery Banner ──────────────────────────────────────────────────────────
+
+function RecoveryBanner({ data, onRespond, onDismiss }) {
+  const symptoms = (data.symptoms || []).slice(0, 3).join(', ').replace(/_/g, ' ') || 'illness';
+  const location = data.county ? `${data.county}${data.state ? ', ' + data.state : ''}` : 'your area';
+
+  return (
+    <div style={{
+      background: '#FFFBEB', border: '2px solid #D97706',
+      borderRadius: 14, padding: '16px 18px', marginBottom: 4,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: '1.1rem' }}>🔔</span>
+          <div>
+            <div style={{ color: '#D97706', fontWeight: 700, fontSize: '0.85rem' }}>
+              Welcome back — {data.daysSince} day{data.daysSince !== 1 ? 's' : ''} ago you reported {symptoms}
+            </div>
+            <div style={{ color: '#6B7280', fontSize: '0.7rem', marginTop: 1 }}>
+              in {location} · How are you feeling now?
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onDismiss}
+          style={{ background: 'none', border: 'none', color: '#9CA3AF', fontSize: '1rem', cursor: 'pointer', padding: 2, lineHeight: 1 }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => onRespond('better')}
+          style={{
+            flex: 1, background: '#F0FDF4', border: '1.5px solid #059669',
+            borderRadius: 8, padding: '9px 6px', cursor: 'pointer',
+            color: '#059669', fontWeight: 700, fontSize: '0.78rem',
+          }}
+        >
+          ✅ Better
+        </button>
+        <button
+          onClick={() => onRespond('still_sick')}
+          style={{
+            flex: 1, background: '#FEF2F2', border: '1.5px solid #EA580C',
+            borderRadius: 8, padding: '9px 6px', cursor: 'pointer',
+            color: '#EA580C', fontWeight: 700, fontSize: '0.78rem',
+          }}
+        >
+          🤒 Still Sick
+        </button>
+        <button
+          onClick={() => onRespond('worse')}
+          style={{
+            flex: 1, background: '#FEF2F2', border: '1.5px solid #DC2626',
+            borderRadius: 8, padding: '9px 6px', cursor: 'pointer',
+            color: '#DC2626', fontWeight: 700, fontSize: '0.78rem',
+          }}
+        >
+          🆘 Worse
+        </button>
+      </div>
+
+      <div style={{ color: '#9CA3AF', fontSize: '0.64rem', marginTop: 8 }}>
+        Your recovery data helps track illness duration and community recovery curves
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
+
 export default function CheckIn({ setView, currentUser }) {
-  const [streak, setStreak] = useState(0);
+  const [streak, setStreak]           = useState(0);
   const [demoActive, setDemoActive]   = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
-  const [scenario, setScenario]       = useState(null); // 'national' | 'new_england'
+  const [scenario, setScenario]       = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [recoveryData, setRecoveryData]     = useState(null);
+  const [countyUpdate, setCountyUpdate]     = useState(null);
 
   useEffect(() => {
     setStreak(getStreak());
     axios.get('/api/demo/status').then(r => setDemoActive(r.data.demo_active)).catch(() => {});
+
+    // First-visit onboarding
+    if (!localStorage.getItem('cp_onboarded')) {
+      setShowOnboarding(true);
+    }
+
+    // Recovery check-in (2–10 days after a sick report)
+    try {
+      const raw = localStorage.getItem('cp_last_sick');
+      if (raw) {
+        const d = JSON.parse(raw);
+        const daysSince = (Date.now() - new Date(d.date).getTime()) / 86400000;
+        if (daysSince >= 2 && daysSince <= 10) {
+          setRecoveryData({ ...d, daysSince: Math.round(daysSince) });
+        } else if (daysSince > 10) {
+          localStorage.removeItem('cp_last_sick');
+        }
+      }
+    } catch (_) {}
+
+    // "What changed" county update brief (after ≥1 day away)
+    try {
+      const snap = JSON.parse(localStorage.getItem('cp_last_county_snapshot') || 'null');
+      if (snap?.fips) {
+        const daysSince = (Date.now() - new Date(snap.date).getTime()) / 86400000;
+        if (daysSince >= 1) {
+          axios.get(`/api/county-detail/${snap.fips}`)
+            .then(r => {
+              const currentTrend = r.data.stats?.trend_pct ?? 0;
+              const currentRisk = r.data.ai_analysis?.risk_level ?? snap.riskLevel;
+              const trendDelta = Math.abs(currentTrend - (snap.trendPct ?? 0));
+              if (currentRisk !== snap.riskLevel || trendDelta >= 10) {
+                setCountyUpdate({
+                  county: snap.county, state: snap.state,
+                  prevRisk: snap.riskLevel, currentRisk,
+                  prevTrend: snap.trendPct ?? 0, currentTrend,
+                  daysSince: Math.round(daysSince),
+                });
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    } catch (_) {}
   }, []);
+
+  const completeOnboarding = (ageGroup) => {
+    localStorage.setItem('cp_age_group', ageGroup);
+    localStorage.setItem('cp_onboarded', 'true');
+    setShowOnboarding(false);
+  };
+
+  const handleRecovery = (status) => {
+    localStorage.removeItem('cp_last_sick');
+    setRecoveryData(null);
+    if (status === 'better') {
+      const today = new Date().toDateString();
+      localStorage.setItem('cp_last_checkin', today);
+      const s = parseInt(localStorage.getItem('cp_streak') || '0');
+      localStorage.setItem('cp_streak', s + 1);
+      setStreak(s + 1);
+      setView('wellness');
+    } else {
+      setView('form');
+    }
+  };
 
   const loadScenario = async (type) => {
     setDemoLoading(true);
@@ -28,6 +286,8 @@ export default function CheckIn({ setView, currentUser }) {
       if (demoActive) await axios.post('/api/demo/clear');
       if (type === 'new_england') {
         await axios.post('/api/demo/seed-new-england');
+      } else if (type === 'southern_az') {
+        await axios.post('/api/demo/seed-southern-az');
       } else {
         await axios.post('/api/demo/seed');
       }
@@ -54,9 +314,28 @@ export default function CheckIn({ setView, currentUser }) {
   return (
     <div className="checkin-screen">
 
+      {/* ── Onboarding Modal ─────────────────────────────────────── */}
+      {showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
+
+      {/* ── Recovery Banner ──────────────────────────────────────── */}
+      {recoveryData && !showOnboarding && (
+        <RecoveryBanner
+          data={recoveryData}
+          onRespond={handleRecovery}
+          onDismiss={() => setRecoveryData(null)}
+        />
+      )}
+
+      {/* ── County Update Brief ───────────────────────────────────── */}
+      {countyUpdate && !recoveryData && !showOnboarding && (
+        <CountyUpdateBrief
+          update={countyUpdate}
+          onDismiss={() => setCountyUpdate(null)}
+        />
+      )}
+
       {/* ── Hero ─────────────────────────────────────────────── */}
       <div className="checkin-hero">
-        {/* Decorative EKG line */}
         <svg
           viewBox="0 0 320 28"
           style={{ width: '100%', maxWidth: 300, height: 28, margin: '0 auto 18px', display: 'block', opacity: 0.18 }}
@@ -171,6 +450,15 @@ export default function CheckIn({ setView, currentUser }) {
             label="🔴 New England Outbreak"
             disabled={demoLoading}
             onClick={() => loadScenario('new_england')}
+          />
+          <ScenarioBtn
+            active={scenario === 'southern_az'}
+            activeColor="#D97706"
+            activeBg="rgba(217,119,6,0.07)"
+            activeBorder="rgba(217,119,6,0.4)"
+            label="🌵 Southern AZ Border"
+            disabled={demoLoading}
+            onClick={() => loadScenario('southern_az')}
           />
           {demoActive && (
             <ScenarioBtn

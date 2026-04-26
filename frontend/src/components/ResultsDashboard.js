@@ -3,6 +3,8 @@ import ForecastChart from './ForecastChart';
 import NotifyButton from './NotifyButton';
 import AIExplainer from './AIExplainer';
 import { getCountyDetail, getAIResult } from '../api';
+import { EpiCurve } from './CountyDetailPanel';
+import EpidemicForecast from './EpidemicForecast';
 
 const RISK_COLOR  = { low: '#059669', medium: '#D97706', high: '#EA580C', critical: '#DC2626', severe: '#DC2626' };
 const RISK_BG     = { low: '#F0FDF4', medium: '#FFFBEB', high: '#FFF7ED', critical: '#FEF2F2', severe: '#FEF2F2' };
@@ -64,6 +66,74 @@ function StatTile({ label, value, color }) {
   );
 }
 
+function ClusterVerdictCard({ formData, cluster, riskLevel, cd, whoAlerts }) {
+  const { trend_pct = 0, report_count = 0, forecast = 'stable' } = cluster;
+  const cdTrend = cd?.stats?.trend_pct ?? 0;
+  const effectiveTrend = cdTrend !== 0 ? cdTrend : trend_pct;
+
+  const userSymptoms = (formData?.symptoms || []).map(s => s.toLowerCase().replace(/_/g, ' ').trim());
+  const countyTopSx = (cd?.symptoms || []).slice(0, 5).map(s => s.name.toLowerCase().replace(/_/g, ' ').trim());
+  const matched = userSymptoms.filter(us => countyTopSx.some(cs => cs.includes(us) || us.includes(cs)));
+  const matchPct = userSymptoms.length > 0 ? Math.round((matched.length / userSymptoms.length) * 100) : 0;
+
+  const isHigh = riskLevel === 'high' || riskLevel === 'critical';
+  let verdict;
+  if (effectiveTrend >= 20 && report_count >= 5 && matchPct >= 40 && isHigh) verdict = 'active';
+  else if (effectiveTrend >= 10 && report_count >= 3) verdict = 'emerging';
+  else if (effectiveTrend > 0 || report_count >= 2 || forecast === 'growing') verdict = 'elevated';
+  else verdict = 'clear';
+
+  const V = {
+    active:   { bg: '#FEF2F2', border: '#DC2626', icon: '🚨', title: 'Active Cluster Signal Detected', subtitle: 'Your symptoms match a pattern of emerging community illness in your county. This is consistent with an active local outbreak.', cta: true },
+    emerging: { bg: '#FFF7ED', border: '#EA580C', icon: '⚠️', title: 'Emerging Community Signal', subtitle: 'Reports in your county are rising and your symptoms may be part of a developing outbreak pattern.', cta: true },
+    elevated: { bg: '#FFFBEB', border: '#D97706', icon: '📊', title: 'Elevated County Activity', subtitle: 'Your county is showing above-normal illness reports this week. Your data contributes to early detection.', cta: false },
+    clear:    { bg: '#F0FDF4', border: '#059669', icon: '✅', title: 'No Active Cluster Detected', subtitle: 'Your county is within normal seasonal illness ranges. Your report helps confirm this community baseline.', cta: false },
+  }[verdict];
+
+  const bullets = [];
+  if (matched.length > 0 && countyTopSx.length > 0)
+    bullets.push(`Your ${matched.slice(0, 3).join(', ')} match the top symptoms in ${cd?.county?.county ?? 'your'} County`);
+  if (effectiveTrend > 0)
+    bullets.push(`County illness reports are up ${Math.abs(effectiveTrend)}% from last week`);
+  else if (effectiveTrend < 0)
+    bullets.push(`County reports down ${Math.abs(effectiveTrend)}% — trend improving`);
+  if (report_count > 0)
+    bullets.push(`${report_count} similar reports submitted in the past 72 hours`);
+  if ((whoAlerts || []).length > 0)
+    bullets.push(`WHO has ${whoAlerts.length} active disease alert${whoAlerts.length > 1 ? 's' : ''} relevant to your region`);
+  if ((cd?.travel?.sources?.length ?? 0) > 0)
+    bullets.push(`${cd.travel.sources.length} inbound-flight counties reporting active illness`);
+
+  return (
+    <div style={{ background: V.bg, border: `2px solid ${V.border}`, borderRadius: 14, padding: '16px 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{V.icon}</span>
+        <div>
+          <div style={{ color: V.border, fontWeight: 800, fontSize: '0.9rem', letterSpacing: 0.2 }}>{V.title}</div>
+          <div style={{ color: '#6B7280', fontSize: '0.67rem', marginTop: 2 }}>Community Outbreak Analysis · AI-synthesized from self-reports, CDC FluView, WHO &amp; travel data</div>
+        </div>
+      </div>
+      <p style={{ color: '#374151', fontSize: '0.84rem', margin: '0 0 10px', lineHeight: 1.55 }}>{V.subtitle}</p>
+      {bullets.length > 0 && (
+        <div style={{ borderTop: `1px solid ${V.border}33`, paddingTop: 10, marginBottom: V.cta ? 10 : 0 }}>
+          {bullets.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: i < bullets.length - 1 ? 5 : 0 }}>
+              <span style={{ color: V.border, fontSize: '0.66rem', marginTop: 3, flexShrink: 0 }}>▶</span>
+              <span style={{ color: '#374151', fontSize: '0.78rem', lineHeight: 1.4 }}>{b}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {V.cta && (
+        <div style={{ background: `${V.border}11`, border: `1px solid ${V.border}33`, borderRadius: 8, padding: '9px 12px', fontSize: '0.78rem', color: V.border, fontWeight: 600 }}>
+          Consider alerting close contacts — use "Alert Your Network" below
+        </div>
+      )}
+      {!cd && <div style={{ color: '#9CA3AF', fontSize: '0.66rem', marginTop: 8 }}>Fetching county data for full synthesis…</div>}
+    </div>
+  );
+}
+
 function SymptomBar({ name, count, pct, max }) {
   return (
     <div style={{ marginBottom: 8 }}>
@@ -94,6 +164,26 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
       localStorage.setItem('cp_streak', server_streak);
     }
   }, [server_streak]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save state for recovery tracking + "what changed" return brief
+  useEffect(() => {
+    const fips = results?.fips || formData?.fips;
+    const snap = {
+      date: new Date().toISOString(),
+      fips,
+      county: results?.county || formData?.county,
+      state: results?.state || formData?.state,
+      riskLevel: results?.risk_level,
+      trendPct: results?.cluster?.trend_pct ?? 0,
+    };
+    if (fips) localStorage.setItem('cp_last_county_snapshot', JSON.stringify(snap));
+    if (results?.risk_level && results.risk_level !== 'low') {
+      localStorage.setItem('cp_last_sick', JSON.stringify({
+        ...snap,
+        symptoms: formData?.symptoms || [],
+      }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll for Gemma AI result
   useEffect(() => {
@@ -167,6 +257,15 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
           🔥 {streak}-day streak
         </div>
       )}
+
+      {/* ── Cluster Verdict ─────────────────────────────────────────── */}
+      <ClusterVerdictCard
+        formData={formData}
+        cluster={cluster}
+        riskLevel={risk_level}
+        cd={cd}
+        whoAlerts={who_alerts}
+      />
 
       {/* ── Risk Banner ─────────────────────────────────────────────── */}
       <div style={{
@@ -331,11 +430,18 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
       <ForecastChart chartData={chart_data} forecast={forecast} trendPct={trend_pct} />
 
       {/* ── Audio ────────────────────────────────────────────────────── */}
-      {audio_url && (
-        <Section title="Listen to Your Assessment" titleColor="#6B7280">
-          <audio controls autoPlay src={audio_url} style={{ width: '100%' }}>
-            Your browser does not support the audio element.
-          </audio>
+      {(ai_pending || audio_url) && (
+        <Section title="🎧 Listen to Your Assessment" titleColor="#2A9D8F">
+          {audio_url ? (
+            <audio controls autoPlay src={audio_url} style={{ width: '100%', borderRadius: 8 }}>
+              Your browser does not support audio playback.
+            </audio>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem', padding: '4px 0' }}>
+              <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
+              Generating audio summary…
+            </div>
+          )}
         </Section>
       )}
 
@@ -363,6 +469,21 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
             <StatTile label="Week Trend"
               value={cd.stats ? `${cd.stats.trend_pct >= 0 ? '+' : ''}${cd.stats.trend_pct}%` : '—'}
               color={cd.stats?.trend_pct > 15 ? '#DC2626' : cd.stats?.trend_pct < -10 ? '#059669' : '#D97706'}
+            />
+          </div>
+
+          {/* Epi Curve */}
+          <EpiCurve daily30d={cd.stats?.daily_30d} />
+
+          {/* SIR Outbreak Forecast */}
+          <div>
+            <div style={{ color: '#DC2626', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+              ⚠ Epidemic Outbreak Forecast — {cd.county?.county} County
+            </div>
+            <EpidemicForecast
+              fips={cd.county?.fips || results?.fips || formData?.fips}
+              county={cd.county?.county}
+              state={cd.county?.state}
             />
           </div>
 
@@ -427,6 +548,29 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
                   );
                 })}
               </div>
+            </Section>
+          )}
+
+          {/* One Health: Animal Signal */}
+          {cd.animal_health?.zoonotic_signal && (
+            <Section title="🐾 One Health: Animal Signal" titleColor="#D97706">
+              <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#D97706', fontSize: '1.3rem', fontWeight: 700 }}>{cd.animal_health.animal_contact_reports}</div>
+                  <div style={{ color: '#6B7280', fontSize: '0.65rem' }}>animal contact reports</div>
+                </div>
+                <div style={{ width: 1, background: '#E5E7EB' }} />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: cd.animal_health.sick_animals_reported > 0 ? '#DC2626' : '#9CA3AF', fontSize: '1.3rem', fontWeight: 700 }}>{cd.animal_health.sick_animals_reported}</div>
+                  <div style={{ color: '#6B7280', fontSize: '0.65rem' }}>sick animals reported</div>
+                </div>
+              </div>
+              <div style={{ color: '#374151', fontSize: '0.76rem', lineHeight: 1.45 }}>
+                {cd.animal_health.sick_animals_reported > 0
+                  ? 'Potential zoonotic signal. Consider veterinary surveillance and reporting to animal health authorities.'
+                  : 'Human-animal contact reported. Monitor for zoonotic transmission patterns.'}
+              </div>
+              <div style={{ color: '#9CA3AF', fontSize: '0.62rem', marginTop: 8 }}>One Health triad: human ↔ animal ↔ environment</div>
             </Section>
           )}
 
