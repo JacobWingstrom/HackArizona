@@ -29,6 +29,25 @@ function GemmaBadge() {
   );
 }
 
+function OpenAIBadge() {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      background: 'linear-gradient(135deg, #F0FDF4, #DCFCE7)',
+      border: '1px solid rgba(16,163,127,0.35)',
+      borderRadius: 20, padding: '2px 8px',
+      fontSize: '0.62rem', fontWeight: 700,
+      color: '#065F46', letterSpacing: 0.3,
+      whiteSpace: 'nowrap', flexShrink: 0,
+    }}>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" fill="#10A37F"/>
+      </svg>
+      OpenAI
+    </div>
+  );
+}
+
 function Section({ title, titleColor = '#374151', badge, children, style }) {
   return (
     <div style={{
@@ -326,8 +345,8 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
         <Section title="What You Should Do" titleColor="#059669">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
             <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
-            <span>Gemma 4 is analyzing your symptoms…</span>
-            <GemmaBadge />
+            <span>OpenAI is analyzing your symptoms…</span>
+            <OpenAIBadge />
           </div>
         </Section>
       )}
@@ -335,7 +354,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
         <Section
           title="What You Should Do"
           titleColor="#059669"
-          badge={<GemmaBadge />}
+          badge={<OpenAIBadge />}
         >
           {recommendations.map((rec, i) => (
             <div key={i} style={{
@@ -376,12 +395,12 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
             <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
             <span>Generating personalized self-care tips…</span>
-            <GemmaBadge />
+            <OpenAIBadge />
           </div>
         </Section>
       )}
       {self_care_tips.length > 0 && (
-        <Section title="How to Help Yourself" titleColor="#2A9D8F" badge={<GemmaBadge />}>
+        <Section title="How to Help Yourself" titleColor="#2A9D8F" badge={<OpenAIBadge />}>
           {self_care_tips.map((item, i) => {
             const CATEGORY_ICON = {
               'symptom relief': '💊', hydration: '💧', rest: '😴',
