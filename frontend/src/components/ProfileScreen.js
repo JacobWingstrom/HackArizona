@@ -4,14 +4,14 @@ import { getProfile } from '../api';
 function StatCard({ label, value, sub, color }) {
   return (
     <div style={{
-      background: '#0d1c2e', border: '1px solid #1f2d45', borderRadius: 10,
+      background: '#F7F9FB', border: '1px solid #E5E7EB', borderRadius: 10,
       padding: '14px 16px', flex: '1 1 140px',
     }}>
       <div style={{ fontSize: '1.5rem', fontWeight: 800, color: color || 'var(--text)' }}>
         {value}
       </div>
       <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: 2 }}>{label}</div>
-      {sub && <div style={{ fontSize: '0.7rem', color: '#6b7a99', marginTop: 2 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: '0.7rem', color: '#6B7280', marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
@@ -42,8 +42,8 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
         <button
           onClick={() => setView('checkin')}
           style={{
-            background: 'none', border: '1px solid #1f2d45', borderRadius: 8,
-            color: '#6b7a99', fontSize: '0.85rem', padding: '6px 12px', cursor: 'pointer', width: 'auto',
+            background: 'none', border: '1px solid #E5E7EB', borderRadius: 8,
+            color: '#6B7280', fontSize: '0.85rem', padding: '6px 12px', cursor: 'pointer', width: 'auto',
           }}
         >
           ← Back
@@ -54,9 +54,9 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
       {/* Avatar + identity */}
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
         <div style={{
-          width: 56, height: 56, borderRadius: '50%', background: '#00d4aa22',
-          border: '2px solid #00d4aa44', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontSize: '1.5rem', fontWeight: 800, color: '#00d4aa',
+          width: 56, height: 56, borderRadius: '50%', background: 'rgba(44,82,130,0.08)',
+          border: '2px solid rgba(44,82,130,0.2)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: '1.5rem', fontWeight: 800, color: '#2A9D8F',
           flexShrink: 0,
         }}>
           {currentUser?.username?.[0]?.toUpperCase()}
@@ -64,12 +64,12 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
         <div>
           <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{currentUser?.username}</div>
           {memberSince && (
-            <div style={{ color: '#6b7a99', fontSize: '0.78rem', marginTop: 2 }}>
+            <div style={{ color: '#6B7280', fontSize: '0.78rem', marginTop: 2 }}>
               Member since {memberSince}
             </div>
           )}
           {stats?.home_county && (
-            <div style={{ color: '#6b7a99', fontSize: '0.78rem' }}>
+            <div style={{ color: '#6B7280', fontSize: '0.78rem' }}>
               📍 {stats.home_county} County, AZ
             </div>
           )}
@@ -77,8 +77,8 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
         <button
           onClick={onLogout}
           style={{
-            marginLeft: 'auto', background: 'none', border: '1px solid #1f2d45',
-            borderRadius: 6, color: '#6b7a99', fontSize: '0.75rem',
+            marginLeft: 'auto', background: 'none', border: '1px solid #E5E7EB',
+            borderRadius: 6, color: '#6B7280', fontSize: '0.75rem',
             padding: '5px 10px', cursor: 'pointer', flexShrink: 0, width: 'auto',
           }}
         >
@@ -96,13 +96,13 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
               label="Current Streak"
               value={`🔥 ${stats?.streak ?? 0}`}
               sub="consecutive days"
-              color="#ffa502"
+              color="#D97706"
             />
             <StatCard
               label="Best Streak"
               value={`${stats?.best_streak ?? 0} days`}
               sub="personal record"
-              color="#ffd32a"
+              color="#F59E0B"
             />
           </div>
 
@@ -112,19 +112,19 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
               label="Total Check-ins"
               value={stats?.total_checkins ?? 0}
               sub="all time"
-              color="#00d4aa"
+              color="#2A9D8F"
             />
             <StatCard
               label="Healthy Days"
               value={stats?.healthy_checkins ?? 0}
               sub={healthyPct != null ? `${healthyPct}% of check-ins` : undefined}
-              color="#2ed573"
+              color="#059669"
             />
             <StatCard
               label="Sick Reports"
               value={stats?.sick_checkins ?? 0}
               sub="submitted to community"
-              color="#ff6b81"
+              color="#DC2626"
             />
           </div>
 
@@ -134,18 +134,18 @@ export default function ProfileScreen({ currentUser, setView, onLogout }) {
             <div style={{ display: 'flex', gap: 24 }}>
               <div>
                 <div style={{ fontSize: '1.3rem', fontWeight: 800 }}>{stats?.friend_count ?? 0}</div>
-                <div style={{ fontSize: '0.78rem', color: '#6b7a99' }}>friends</div>
+                <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>friends</div>
               </div>
               {stats?.friend_count > 0 && (
                 <div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 800 }}>#{stats?.leaderboard_rank ?? '—'}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#6b7a99' }}>leaderboard rank</div>
+                  <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>leaderboard rank</div>
                 </div>
               )}
               {stats?.last_checkin && (
                 <div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 800 }}>{stats.last_checkin}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#6b7a99' }}>last check-in</div>
+                  <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>last check-in</div>
                 </div>
               )}
             </div>

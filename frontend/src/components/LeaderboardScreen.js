@@ -55,8 +55,8 @@ export default function LeaderboardScreen({ currentUser, setView }) {
         <button
           onClick={() => setView('checkin')}
           style={{
-            background: 'none', border: '1px solid #1f2d45', borderRadius: 8,
-            color: '#6b7a99', fontSize: '0.85rem', padding: '6px 12px',
+            background: 'none', border: '1px solid #E5E7EB', borderRadius: 8,
+            color: '#6B7280', fontSize: '0.85rem', padding: '6px 12px',
             cursor: 'pointer', width: 'auto',
           }}
         >
@@ -66,15 +66,15 @@ export default function LeaderboardScreen({ currentUser, setView }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', marginBottom: 20, border: '1px solid #1f2d45' }}>
+      <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', marginBottom: 20, border: '1px solid #E5E7EB' }}>
         {[['leaderboard', '🏆 Leaderboard'], ['friends', '👥 Friends']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
               flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
-              background: tab === t ? '#00d4aa' : 'transparent',
-              color: tab === t ? '#0a0f1a' : '#6b7a99',
+              background: tab === t ? '#2A9D8F' : 'transparent',
+              color: tab === t ? '#F9FAFB' : '#6B7280',
               fontWeight: tab === t ? 700 : 400,
               fontSize: '0.9rem',
             }}
@@ -112,15 +112,15 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                     gap: 12,
                     padding: '12px 16px',
                     marginBottom: 8,
-                    border: u.is_me ? '1px solid #00d4aa44' : '1px solid #1f2d45',
-                    background: u.is_me ? '#00d4aa0a' : undefined,
+                    border: u.is_me ? '1px solid rgba(44,82,130,0.25)' : '1px solid #E5E7EB',
+                    background: u.is_me ? 'rgba(44,82,130,0.04)' : undefined,
                   }}
                 >
                   <div style={{ fontSize: '1.4rem', width: 32, textAlign: 'center' }}>
                     {RANK_MEDALS[u.rank] || `#${u.rank}`}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, color: u.is_me ? '#00d4aa' : 'var(--text)' }}>
+                    <div style={{ fontWeight: 700, color: u.is_me ? '#2A9D8F' : 'var(--text)' }}>
                       {u.username}{u.is_me && ' (you)'}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.75rem' }}>
@@ -128,7 +128,7 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: u.streak > 0 ? '#ffa502' : '#6b7a99' }}>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: u.streak > 0 ? '#D97706' : '#6B7280' }}>
                       🔥 {u.streak}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.7rem' }}>day streak</div>
@@ -153,8 +153,8 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                   style={{
                     flex: 1,
                     padding: '10px 12px',
-                    background: '#0a0f1a',
-                    border: '1px solid #1f2d45',
+                    background: '#F9FAFB',
+                    border: '1px solid #E5E7EB',
                     borderRadius: 8,
                     color: 'var(--text)',
                     fontSize: '0.9rem',
@@ -171,12 +171,12 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                 </button>
               </div>
               {addMsg && (
-                <div style={{ color: '#00d4aa', fontSize: '0.82rem', marginTop: 8 }}>
+                <div style={{ color: '#2A9D8F', fontSize: '0.82rem', marginTop: 8 }}>
                   ✓ {addMsg}
                 </div>
               )}
               {addError && (
-                <div style={{ color: '#ff4757', fontSize: '0.82rem', marginTop: 8 }}>
+                <div style={{ color: '#DC2626', fontSize: '0.82rem', marginTop: 8 }}>
                   {addError}
                 </div>
               )}
@@ -200,14 +200,14 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                       alignItems: 'center',
                       gap: 12,
                       padding: '10px 0',
-                      borderBottom: i < friends.length - 1 ? '1px solid #1f2d45' : 'none',
+                      borderBottom: i < friends.length - 1 ? '1px solid #E5E7EB' : 'none',
                     }}
                   >
                     <div style={{
                       width: 36, height: 36, borderRadius: '50%',
-                      background: '#1f2d45', display: 'flex', alignItems: 'center',
+                      background: '#E5E7EB', display: 'flex', alignItems: 'center',
                       justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem',
-                      color: '#00d4aa', flexShrink: 0,
+                      color: '#2A9D8F', flexShrink: 0,
                     }}>
                       {f.username[0].toUpperCase()}
                     </div>
@@ -223,9 +223,9 @@ export default function LeaderboardScreen({ currentUser, setView }) {
                       onClick={() => handleRemove(f.username)}
                       style={{
                         background: 'none',
-                        border: '1px solid #1f2d45',
+                        border: '1px solid #E5E7EB',
                         borderRadius: 6,
-                        color: '#6b7a99',
+                        color: '#6B7280',
                         fontSize: '0.75rem',
                         padding: '5px 10px',
                         cursor: 'pointer',

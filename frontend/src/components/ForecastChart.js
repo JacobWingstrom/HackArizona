@@ -12,11 +12,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div style={{
-        background: '#111827', border: '1px solid #1f2d45',
+        background: '#FFFFFF', border: '1px solid #E5E7EB',
         borderRadius: 8, padding: '8px 12px', fontSize: 13,
       }}>
-        <div style={{ color: '#6b7a99', marginBottom: 2 }}>{shortDate(label)}</div>
-        <div style={{ color: '#00d4aa', fontWeight: 700 }}>{payload[0].value} reports</div>
+        <div style={{ color: '#6B7280', marginBottom: 2 }}>{shortDate(label)}</div>
+        <div style={{ color: '#2A9D8F', fontWeight: 700 }}>{payload[0].value} reports</div>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export default function ForecastChart({ chartData, forecast, trendPct }) {
   const data = chartData.map(d => ({ ...d, label: shortDate(d.date) }));
   const avg = Math.round(data.reduce((s, d) => s + d.count, 0) / data.length);
 
-  const trendColor = forecast === 'growing' ? '#ff4757' : forecast === 'declining' ? '#2ed573' : '#ffa502';
+  const trendColor = forecast === 'growing' ? '#DC2626' : forecast === 'declining' ? '#059669' : '#D97706';
   const trendLabel = forecast === 'growing' ? '↑ Growing' : forecast === 'declining' ? '↓ Declining' : '→ Stable';
 
   if (allZero) {
@@ -40,7 +40,7 @@ export default function ForecastChart({ chartData, forecast, trendPct }) {
         <div className="section-title">7-Day Report Trend</div>
         <div className="text-muted" style={{ marginTop: 8, fontSize: '0.9rem' }}>
           No community reports yet in your county.<br />
-          <span style={{ color: '#00d4aa', fontWeight: 600 }}>You're helping build this dataset — thank you.</span>
+          <span style={{ color: '#2A9D8F', fontWeight: 600 }}>You're helping build this dataset — thank you.</span>
         </div>
       </div>
     );
@@ -67,11 +67,11 @@ export default function ForecastChart({ chartData, forecast, trendPct }) {
 
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-          <CartesianGrid stroke="#1f2d45" strokeDasharray="3 3" />
-          <XAxis dataKey="label" tick={{ fill: '#6b7a99', fontSize: 11 }} />
-          <YAxis tick={{ fill: '#6b7a99', fontSize: 11 }} />
+          <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+          <XAxis dataKey="label" tick={{ fill: '#6B7280', fontSize: 11 }} />
+          <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} />
           <Tooltip content={<CustomTooltip />} />
-          <ReferenceLine y={avg} stroke="#1f2d45" strokeDasharray="4 4" />
+          <ReferenceLine y={avg} stroke="#E5E7EB" strokeDasharray="4 4" />
           <Line
             type="monotone"
             dataKey="count"

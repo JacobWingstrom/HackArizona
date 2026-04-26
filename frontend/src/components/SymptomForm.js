@@ -1,30 +1,81 @@
 import React, { useState } from 'react';
 import { submitCheckin } from '../api';
+import CountyPicker from './CountyPicker';
 
-const SYMPTOMS = [
-  { id: 'fever', label: '🌡️ Fever' },
-  { id: 'cough', label: '😮‍💨 Cough' },
-  { id: 'difficulty breathing', label: '😤 Difficulty breathing' },
-  { id: 'loss of smell/taste', label: '👃 Loss of smell/taste' },
-  { id: 'fatigue', label: '😴 Fatigue' },
-  { id: 'headache', label: '🤕 Headache' },
-  { id: 'nausea', label: '🤢 Nausea / vomiting' },
-  { id: 'sore throat', label: '🔴 Sore throat' },
+// Symptom categories — One Health minimum dataset (EpiHack standard)
+// Cross-referenced with HealthMap / Outbreaks Near Me surveillance taxonomy
+const SYMPTOM_CATEGORIES = [
+  {
+    label: 'Whole Body',
+    symptoms: [
+      { id: 'Fever',                          label: 'Fever' },
+      { id: 'Chills',                         label: 'Chills / Night Sweats' },
+      { id: 'Muscle or Body Aches and Pains', label: 'Muscle or Body Aches and Pains' },
+      { id: 'Fatigue',                        label: 'Fatigue' },
+      { id: 'Yellow Skin or Eyes',            label: 'Yellow Skin / Yellow Eyes (Jaundice)' },
+    ],
+  },
+  {
+    label: 'Respiratory',
+    symptoms: [
+      { id: 'Cough / Congestion',             label: 'Cough / Congestion' },
+      { id: 'Difficulty Breathing',           label: 'Difficulty Breathing' },
+      { id: 'Sore Throat',                    label: 'Sore Throat' },
+      { id: 'Loss of Smell or Taste',         label: 'Loss of Smell or Taste' },
+      { id: 'Runny or Stuffy Nose',           label: 'Runny or Stuffy Nose' },
+      { id: 'Chest Tightness',               label: 'Chest Tightness' },
+    ],
+  },
+  {
+    label: 'Digestive',
+    symptoms: [
+      { id: 'Nausea / Vomiting',             label: 'Nausea / Vomiting' },
+      { id: 'Diarrhea',                      label: 'Diarrhea' },
+      { id: 'Stomach Pain or Cramps',        label: 'Stomach Pain or Cramps' },
+      { id: 'Loss of Appetite',              label: 'Loss of Appetite' },
+    ],
+  },
+  {
+    label: 'Skin, Eyes & Other',
+    symptoms: [
+      { id: 'Rash',                          label: 'Rash' },
+      { id: 'Red Eyes',                      label: 'Red Eyes / Pink Eye' },
+      { id: 'Headache',                      label: 'Headache' },
+      { id: 'Dizziness',                     label: 'Dizziness' },
+      { id: 'Bleeding from Body Openings',   label: 'Bleeding from Body Openings' },
+      { id: 'Discolored or Bloody Urine',    label: 'Discolored or Bloody Urine' },
+      { id: 'Ear Pain',                      label: 'Ear Pain' },
+      { id: 'Other',                         label: 'Other' },
+    ],
+  },
 ];
 
+// One Health exposure + severity toggles (EpiHack minimum dataset)
 const TOGGLES = [
-  { id: 'first_time_reporting', label: '🔔 First time reporting these symptoms' },
-  { id: 'recent_travel', label: '✈️ Traveled in the past 2 weeks' },
-  { id: 'event_attendance', label: '🎪 Attended a large event recently' },
-  { id: 'animal_contact', label: '🐄 Had contact with animals / livestock' },
-  { id: 'water_concerns', label: '💧 Concerns about local water source' },
-  { id: 'reporting_to_authority', label: '🏥 Reporting to health authority' },
+  // Exposure
+  { id: 'recent_travel',          label: 'History of travel (past 2 weeks)',           group: 'Exposure' },
+  { id: 'event_attendance',       label: 'Attended a mass gathering recently',          group: 'Exposure' },
+  { id: 'tick_insect_bite',       label: 'Tick or insect bite',                         group: 'Exposure' },
+  { id: 'animal_bite',            label: 'Animal bite',                                 group: 'Exposure' },
+  { id: 'animal_contact',         label: 'Contact with live animals / livestock',        group: 'Exposure' },
+  { id: 'contact_sick_individual',label: 'Contact with sick person / confirmed case',    group: 'Exposure' },
+  // Severity / Healthcare
+  { id: 'absent_from_work',       label: 'Absent from work due to illness',             group: 'Severity' },
+  { id: 'absent_from_school',     label: 'Absent from school due to illness',           group: 'Severity' },
+  { id: 'sought_healthcare',      label: 'Sought healthcare or treatment',              group: 'Severity' },
+  { id: 'reporting_to_authority', label: 'Reporting to a health authority',             group: 'Severity' },
+  // Environmental
+  { id: 'water_concerns',         label: 'Water source concerns or contamination',       group: 'Environmental' },
+  { id: 'flooding',               label: 'Flooding in your area recently',              group: 'Environmental' },
 ];
 
 export default function SymptomForm({ setView, setResults, setFormData }) {
   const [symptoms, setSymptoms] = useState([]);
-  const [zip, setZip] = useState(localStorage.getItem('cp_zip') || '');
+  const [selectedCounty, setSelectedCounty] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('cp_county') || 'null'); } catch { return null; }
+  });
   const [ageGroup, setAgeGroup] = useState(localStorage.getItem('cp_age_group') || 'adult');
+  const [sex, setSex] = useState('');
   const [householdMembers, setHouseholdMembers] = useState(1);
   const [sickMembers, setSickMembers] = useState(0);
   const [toggles, setToggles] = useState({});
@@ -43,14 +94,14 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!zip || zip.length < 5) { setError('Please enter a valid 5-digit zip code.'); return; }
-    if (symptoms.length === 0) { setError('Please select at least one symptom.'); return; }
+    if (!selectedCounty?.fips) { setError('Please select your county.'); return; }
+    if (symptoms.length === 0) { setError('Please select at least one symptom that applies.'); return; }
 
     setError('');
     setLoading(true);
 
     // Cache user preferences
-    localStorage.setItem('cp_zip', zip);
+    localStorage.setItem('cp_county', JSON.stringify(selectedCounty));
     localStorage.setItem('cp_age_group', ageGroup);
 
     // Update streak
@@ -67,8 +118,11 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
     const data = {
       feeling: 'sick',
       symptoms,
-      zip_code: zip,
+      fips: selectedCounty.fips,
+      county: selectedCounty.county,
+      state: selectedCounty.state,
       age_group: ageGroup,
+      sex: sex || null,
       household_members: parseInt(householdMembers),
       sick_household_members: parseInt(sickMembers),
       ...toggles,
@@ -107,34 +161,38 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
       {/* Symptoms */}
       <div className="form-section">
         <h3>Symptoms</h3>
-        <div className="symptom-grid">
-          {SYMPTOMS.map(s => (
-            <div
-              key={s.id}
-              className={`symptom-chip ${symptoms.includes(s.id) ? 'selected' : ''}`}
-              onClick={() => toggleSymptom(s.id)}
-            >
-              <span className="symptom-chip-dot" />
-              {s.label}
+        {SYMPTOM_CATEGORIES.map(cat => (
+          <div key={cat.label} style={{ marginBottom: 16 }}>
+            <div style={{
+              color: '#6B7280', fontSize: '0.72rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: 0.8,
+              marginBottom: 8,
+            }}>
+              {cat.label}
             </div>
-          ))}
-        </div>
+            <div className="symptom-grid">
+              {cat.symptoms.map(s => (
+                <div
+                  key={s.id}
+                  className={`symptom-chip ${symptoms.includes(s.id) ? 'selected' : ''}`}
+                  onClick={() => toggleSymptom(s.id)}
+                >
+                  <span className="symptom-chip-dot" />
+                  {s.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Location & Demographics */}
       <div className="form-section">
         <h3>About You</h3>
         <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Zip Code</label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. 85721"
-              maxLength={5}
-              value={zip}
-              onChange={e => setZip(e.target.value.replace(/\D/g, ''))}
-            />
+          <div className="form-group" style={{ flex: '1 1 200px' }}>
+            <label className="form-label">County</label>
+            <CountyPicker value={selectedCounty} onChange={setSelectedCounty} />
           </div>
           <div className="form-group">
             <label className="form-label">Age Group</label>
@@ -151,6 +209,19 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
         </div>
         <div className="form-row">
           <div className="form-group">
+            <label className="form-label">Sex</label>
+            <select
+              className="form-input"
+              value={sex}
+              onChange={e => setSex(e.target.value)}
+            >
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="form-group">
             <label className="form-label">Household members</label>
             <input
               className="form-input"
@@ -161,6 +232,8 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
               onChange={e => setHouseholdMembers(e.target.value)}
             />
           </div>
+        </div>
+        <div className="form-row">
           <div className="form-group">
             <label className="form-label">Sick household members</label>
             <input
@@ -175,21 +248,34 @@ export default function SymptomForm({ setView, setResults, setFormData }) {
         </div>
       </div>
 
-      {/* One Health Toggles */}
+      {/* One Health Exposure, Severity & Environmental */}
       <div className="form-section">
         <h3>One Health Factors</h3>
-        <div className="toggle-list">
-          {TOGGLES.map(t => (
-            <div
-              key={t.id}
-              className={`toggle-item ${toggles[t.id] ? 'active' : ''}`}
-              onClick={() => toggleField(t.id)}
-            >
-              <span>{t.label}</span>
-              <div className={`toggle-pill ${toggles[t.id] ? 'on' : ''}`} />
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 14 }}>
+          These factors help identify outbreak sources. All answers are anonymous.
+        </p>
+        {['Exposure', 'Severity', 'Environmental'].map(group => (
+          <div key={group} style={{ marginBottom: 14 }}>
+            <div style={{
+              color: '#6B7280', fontSize: '0.7rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6,
+            }}>
+              {group}
             </div>
-          ))}
-        </div>
+            <div className="toggle-list">
+              {TOGGLES.filter(t => t.group === group).map(t => (
+                <div
+                  key={t.id}
+                  className={`toggle-item ${toggles[t.id] ? 'active' : ''}`}
+                  onClick={() => toggleField(t.id)}
+                >
+                  <span>{t.label}</span>
+                  <div className={`toggle-pill ${toggles[t.id] ? 'on' : ''}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {error && (

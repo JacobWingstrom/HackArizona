@@ -1,5 +1,6 @@
+import sqlite3
 from datetime import datetime, timedelta
-from database import get_reports_by_county, get_all_county_counts, AZ_COUNTIES
+from database import get_reports_by_county, get_all_county_counts, DB_PATH
 
 def detect_cluster(county, window_days=3, threshold=5):
     rows = get_reports_by_county(county, days=14)
@@ -52,12 +53,23 @@ def detect_cluster(county, window_days=3, threshold=5):
     }
 
 def get_community_risk_map():
-    county_counts = get_all_county_counts(days=3)
-    result = []
+    """Return risk entries for every county that has sick reports in the past 3 days."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT fips, county, COUNT(*) AS count
+        FROM reports
+        WHERE feeling = 'sick'
+          AND timestamp >= datetime('now', '-3 days')
+          AND fips IS NOT NULL AND fips != ''
+        GROUP BY fips
+    """)
+    rows = c.fetchall()
+    conn.close()
 
-    for county in AZ_COUNTIES:
-        count = county_counts.get(county, 0)
-        cluster = detect_cluster(county)
+    result = []
+    for fips, county_name, count in rows:
+        cluster = detect_cluster(county_name)
         trend = cluster["trend_pct"]
 
         if count >= 20 or (count >= 10 and trend > 30):
@@ -68,11 +80,12 @@ def get_community_risk_map():
             risk_level = "low"
 
         result.append({
-            "county": county,
+            "fips":         fips,
+            "county":       county_name,
             "report_count": count,
-            "trend_pct": trend,
-            "risk_level": risk_level,
-            "is_cluster": cluster["is_cluster"],
+            "trend_pct":    trend,
+            "risk_level":   risk_level,
+            "is_cluster":   cluster["is_cluster"],
         })
 
     return result

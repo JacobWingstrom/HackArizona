@@ -30,39 +30,65 @@ export default function AuthScreen({ onAuth, onSkip }) {
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: '0 auto', padding: '24px 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔐</div>
-        <h2 style={{ margin: 0 }}>
-          {tab === 'login' ? 'Sign in to CommunityPulse' : 'Create your account'}
+    <div style={{ maxWidth: 400, margin: '0 auto', padding: '32px 0' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12,
+          background: 'rgba(44,82,130,0.08)',
+          border: '1px solid rgba(44,82,130,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.3rem', marginBottom: 16,
+        }}>
+          🔐
+        </div>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 700, marginBottom: 6, color: '#1F2937' }}>
+          {tab === 'login' ? 'Welcome back' : 'Join CommunityPulse'}
         </h2>
-        <p className="text-muted" style={{ marginTop: 6, fontSize: '0.85rem' }}>
-          Track your streak, add friends, and compete on the leaderboard.
+        <p style={{ color: '#6B7280', fontSize: '0.85rem', lineHeight: 1.5 }}>
+          Track your streak, add friends, and help protect your community.
         </p>
       </div>
 
       {/* Tab switcher */}
-      <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', marginBottom: 20, border: '1px solid #1f2d45' }}>
-        {['login', 'register'].map(t => (
+      <div style={{
+        display: 'flex',
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginBottom: 20,
+        border: '1px solid #E5E7EB',
+        background: '#F7F9FB',
+        padding: 3,
+        gap: 3,
+      }}>
+        {[
+          { key: 'login', label: 'Sign In' },
+          { key: 'register', label: 'Register' },
+        ].map(({ key, label }) => (
           <button
-            key={t}
-            onClick={() => { setTab(t); setError(''); }}
+            key={key}
+            onClick={() => { setTab(key); setError(''); }}
             style={{
-              flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
-              background: tab === t ? '#00d4aa' : 'transparent',
-              color: tab === t ? '#0a0f1a' : '#6b7a99',
-              fontWeight: tab === t ? 700 : 400,
-              fontSize: '0.9rem',
+              flex: 1, padding: '8px', border: 'none', cursor: 'pointer',
+              borderRadius: 6,
+              background: tab === key ? '#2C5282' : 'transparent',
+              color: tab === key ? '#FFFFFF' : '#6B7280',
+              fontWeight: tab === key ? 600 : 400,
+              fontSize: '0.87rem',
+              transition: 'all 0.15s',
+              fontFamily: 'var(--font-body)',
             }}
           >
-            {t === 'login' ? 'Sign In' : 'Register'}
+            {label}
           </button>
         ))}
       </div>
 
-      <form onSubmit={submit}>
+      {/* Form */}
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
         {tab === 'register' && (
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Username</label>
             <input
               className="form-input"
@@ -74,7 +100,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
             />
           </div>
         )}
-        <div className="form-group">
+        <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Email</label>
           <input
             className="form-input"
@@ -85,7 +111,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
             required
           />
         </div>
-        <div className="form-group">
+        <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Password</label>
           <input
             className="form-input"
@@ -98,18 +124,32 @@ export default function AuthScreen({ onAuth, onSkip }) {
         </div>
 
         {error && (
-          <div style={{ color: '#ff4757', fontSize: '0.85rem', marginBottom: 12 }}>{error}</div>
+          <div style={{
+            color: '#DC2626', fontSize: '0.82rem',
+            background: '#FEF2F2', border: '1px solid rgba(220,38,38,0.25)',
+            borderRadius: 6, padding: '8px 12px',
+          }}>
+            {error}
+          </div>
         )}
 
-        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
-          {loading ? 'Loading...' : tab === 'login' ? 'Sign In' : 'Create Account'}
+        <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 4 }}>
+          {loading
+            ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>Loading…</span>
+            : tab === 'login' ? 'Sign In' : 'Create Account'}
         </button>
       </form>
 
-      <div style={{ textAlign: 'center', marginTop: 20 }}>
+      <div style={{ textAlign: 'center', marginTop: 18 }}>
         <button
           onClick={onSkip}
-          style={{ background: 'none', border: 'none', color: '#6b7a99', fontSize: '0.8rem', cursor: 'pointer' }}
+          style={{
+            background: 'none', border: 'none', color: '#9CA3AF',
+            fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'var(--font-mono)',
+            transition: 'color 0.13s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#6B7280'}
+          onMouseLeave={e => e.currentTarget.style.color = '#9CA3AF'}
         >
           Continue without an account →
         </button>

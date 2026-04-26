@@ -29,7 +29,7 @@ AZ_COUNTIES = [
 
 def zip_to_county(zip_code):
     prefix = str(zip_code)[:3]
-    return ZIP_TO_COUNTY.get(prefix, "Maricopa")
+    return ZIP_TO_COUNTY.get(prefix, "Unknown")
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -59,6 +59,14 @@ def init_db():
         'ALTER TABLE reports ADD COLUMN is_demo INTEGER DEFAULT 0',
         'ALTER TABLE reports ADD COLUMN user_id INTEGER',
         'ALTER TABLE reports ADD COLUMN fips TEXT',
+        'ALTER TABLE reports ADD COLUMN sex TEXT',
+        'ALTER TABLE reports ADD COLUMN tick_insect_bite INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN animal_bite INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN contact_sick_individual INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN absent_from_work INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN absent_from_school INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN sought_healthcare INTEGER DEFAULT 0',
+        'ALTER TABLE reports ADD COLUMN flooding INTEGER DEFAULT 0',
     ]:
         try:
             c.execute(migration)
@@ -68,18 +76,21 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_report(data, county, user_id=None):
+def save_report(data, county, user_id=None, fips=None):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
-        INSERT INTO reports (zip_code, county, feeling, symptoms, age_group,
+        INSERT INTO reports (zip_code, county, fips, feeling, symptoms, age_group,
             household_members, sick_household_members, first_time_reporting,
             recent_travel, event_attendance, animal_contact, sick_animals,
-            water_concerns, reporting_to_authority, user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            water_concerns, reporting_to_authority, user_id,
+            sex, tick_insect_bite, animal_bite, contact_sick_individual,
+            absent_from_work, absent_from_school, sought_healthcare, flooding)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         data.get('zip_code', ''),
         county,
+        fips or data.get('fips', '') or None,
         data.get('feeling', 'sick'),
         json.dumps(data.get('symptoms', [])),
         data.get('age_group', 'adult'),
@@ -93,6 +104,14 @@ def save_report(data, county, user_id=None):
         1 if data.get('water_concerns') else 0,
         1 if data.get('reporting_to_authority') else 0,
         user_id,
+        data.get('sex') or None,
+        1 if data.get('tick_insect_bite') else 0,
+        1 if data.get('animal_bite') else 0,
+        1 if data.get('contact_sick_individual') else 0,
+        1 if data.get('absent_from_work') else 0,
+        1 if data.get('absent_from_school') else 0,
+        1 if data.get('sought_healthcare') else 0,
+        1 if data.get('flooding') else 0,
     ))
     conn.commit()
     conn.close()
@@ -173,10 +192,30 @@ def seed_demo_data():
     ]
     age_groups = ["adult"] * 6 + ["elderly"] * 3 + ["child"] * 1
 
-    # Outbreak growth multipliers (day -6 → day 0)
-    GROWTH_CURVE   = [0.55, 0.65, 0.73, 0.82, 0.90, 0.96, 1.00]
-    STABLE_CURVE   = [0.90, 1.05, 0.95, 1.00, 1.10, 0.95, 1.00]
-    DECLINING_CURVE= [1.00, 0.96, 0.90, 0.82, 0.73, 0.65, 0.55]
+    # Outbreak growth multipliers (index 0 = 29 days ago, index 29 = today)
+    GROWTH_CURVE = [
+        0.20, 0.22, 0.25, 0.28, 0.30,
+        0.35, 0.38, 0.42, 0.46, 0.50,
+        0.55, 0.60, 0.65, 0.68,
+        0.72, 0.75, 0.80, 0.84, 0.87, 0.90,
+        0.91, 0.93, 0.95, 0.96, 0.97, 0.98, 0.99, 1.00, 1.00, 1.00,
+    ]
+    STABLE_CURVE = [
+        0.95, 1.05, 0.98, 1.02, 0.97,
+        1.00, 0.96, 1.04, 0.99, 1.01,
+        0.98, 1.03, 0.97, 1.00, 1.02,
+        0.96, 1.05, 0.99, 1.01, 0.98,
+        1.00, 0.97, 1.03, 0.99, 1.02,
+        0.98, 1.00, 0.99, 1.01, 1.00,
+    ]
+    DECLINING_CURVE = [
+        1.00, 1.00, 0.99, 0.98, 0.97,
+        0.96, 0.94, 0.92, 0.90, 0.88,
+        0.85, 0.82, 0.79, 0.76, 0.73,
+        0.70, 0.67, 0.64, 0.61, 0.58,
+        0.55, 0.52, 0.49, 0.46, 0.44,
+        0.42, 0.40, 0.38, 0.36, 0.35,
+    ]
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -192,7 +231,7 @@ def seed_demo_data():
         curve = GROWTH_CURVE if outbreak else (DECLINING_CURVE if declining else STABLE_CURVE)
 
         for day_offset, multiplier in enumerate(curve):
-            day = today - timedelta(days=(6 - day_offset))
+            day = today - timedelta(days=(29 - day_offset))
             # Natural day-of-week effect: weekends ~20% fewer reports
             dow_factor = 0.82 if day.weekday() >= 5 else 1.0
             total_today = max(1, round(base * multiplier * dow_factor))
@@ -233,6 +272,203 @@ def seed_demo_data():
                         0,
                         random.randint(0, 1),
                         random.randint(0, 1),
+                        fips,
+                    ))
+                    inserted += 1
+
+    conn.commit()
+    conn.close()
+    return inserted
+
+
+def seed_new_england_outbreak():
+    """
+    Seed a realistic epidemic outbreak scenario centered in New England.
+
+    Scenario: A novel respiratory illness emerges in Suffolk County (Boston) ~4 weeks ago,
+    spreads to neighboring MA counties, then propagates to CT, RI, NH, ME, VT.
+
+    Epicentre (Suffolk/Middlesex MA): explosive growth curve, high sick rate, travel flags.
+    Inner ring (Essex, Norfolk, Plymouth MA + Providence RI + Hartford CT): rapid growth.
+    Outer ring (rest of NE): moderate growth arriving later.
+    Background: rest of US at low baseline so the NE cluster stands out on the map.
+    """
+    # (fips, county, state, pop, outbreak_tier, curve_start_day)
+    # tier 0 = epicentre, tier 1 = inner ring, tier 2 = outer ring, tier 3 = background NE
+    NE_COUNTIES = [
+        # Suffolk MA (Boston) — epicentre
+        ("25025", "Suffolk",    "MA", 797936,  0, 0),
+        # Middlesex MA — day 3 spread
+        ("25017", "Middlesex",  "MA", 1632002, 0, 3),
+        # Inner ring MA
+        ("25009", "Essex",      "MA", 809829,  1, 5),
+        ("25021", "Norfolk",    "MA", 725981,  1, 5),
+        ("25023", "Plymouth",   "MA", 530819,  1, 7),
+        ("25005", "Bristol",    "MA", 579200,  1, 8),
+        # Worcester MA — further spread
+        ("25027", "Worcester",  "MA", 862111,  2, 10),
+        ("25013", "Hampden",    "MA", 465825,  2, 12),
+        # Providence RI — major hub, early spread
+        ("44007", "Providence", "RI", 660741,  1, 6),
+        ("44003", "Kent",       "RI", 170363,  2, 10),
+        ("44009", "Washington", "RI", 129839,  2, 12),
+        # Hartford + New Haven CT
+        ("09003", "Hartford",   "CT", 899498,  1, 7),
+        ("09009", "New Haven",  "CT", 864835,  1, 9),
+        ("09001", "Fairfield",  "CT", 957419,  2, 11),
+        ("09011", "New London", "CT", 268555,  2, 13),
+        # NH
+        ("33011", "Hillsborough","NH", 422937, 2, 10),
+        ("33015", "Rockingham", "NH", 314176,  2, 12),
+        ("33013", "Merrimack",  "NH", 153808,  3, 15),
+        # ME
+        ("23005", "Cumberland", "ME", 303069,  2, 11),
+        ("23019", "Penobscot",  "ME", 152199,  3, 16),
+        ("23031", "York",       "ME", 211972,  2, 13),
+        # VT
+        ("50007", "Chittenden", "VT", 168323,  3, 14),
+        # Smaller MA
+        ("25015", "Hampshire",  "MA", 162308,  2, 12),
+        ("25003", "Berkshire",  "MA", 129026,  3, 16),
+        ("25001", "Barnstable", "MA", 228996,  2, 13),
+    ]
+
+    # Background US counties at low baseline so NE stands out
+    BACKGROUND_COUNTIES = [
+        ("04013", "Maricopa",     "AZ", 4485448, 4, 0),
+        ("04019", "Pima",         "AZ", 1059501, 4, 0),
+        ("06037", "Los Angeles",  "CA", 9829544, 4, 0),
+        ("06073", "San Diego",    "CA", 3298634, 4, 0),
+        ("06059", "Orange",       "CA", 3175692, 4, 0),
+        ("48201", "Harris",       "TX", 4731145, 4, 0),
+        ("17031", "Cook",         "IL", 5150233, 4, 0),
+        ("36061", "New York",     "NY", 1576876, 4, 0),
+        ("36047", "Kings",        "NY", 2561225, 4, 0),
+        ("36081", "Queens",       "NY", 2253858, 4, 0),
+        ("36005", "Bronx",        "NY", 1418207, 4, 0),
+        ("34013", "Essex",        "NJ", 862553,  4, 0),
+        ("34003", "Bergen",       "NJ", 955732,  4, 0),
+        ("42101", "Philadelphia", "PA", 1576251, 4, 0),
+        ("11001", "District of Columbia", "DC", 689545, 4, 0),
+        ("24033", "Prince George's","MD", 967201, 4, 0),
+        ("51059", "Fairfax",      "VA", 1150309, 4, 0),
+        ("53033", "King",         "WA", 2269675, 4, 0),
+        ("41051", "Multnomah",    "OR", 815428,  4, 0),
+        ("26163", "Wayne",        "MI", 1749367, 4, 0),
+    ]
+
+    symptom_pools_respiratory = [
+        ["fever", "cough", "fatigue"],
+        ["fever", "cough", "difficulty_breathing"],
+        ["fever", "fatigue", "headache", "body_aches"],
+        ["cough", "sore_throat", "runny_nose"],
+        ["fever", "loss_of_smell_taste", "fatigue"],
+        ["fever", "chills", "body_aches"],
+        ["difficulty_breathing", "fever", "cough"],
+        ["fatigue", "headache", "fever"],
+    ]
+    symptom_pools_mild = [
+        ["cough", "fatigue"],
+        ["headache", "fatigue"],
+        ["runny_nose", "sore_throat"],
+        ["cough"],
+    ]
+    age_groups = ["adult"] * 5 + ["elderly"] * 3 + ["child"] * 2
+
+    # Growth curves indexed 0..29 (day 29 = today)
+    # Tier 0: explosive — starts low, accelerates sharply
+    EXPLOSIVE = [
+        0.05, 0.06, 0.08, 0.10, 0.13, 0.17, 0.22, 0.28, 0.35, 0.43,
+        0.52, 0.62, 0.72, 0.80, 0.87, 0.91, 0.94, 0.96, 0.97, 0.98,
+        0.98, 0.99, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,
+    ]
+    # Tier 1: rapid spread, starts a few days later
+    RAPID = [
+        0.00, 0.00, 0.00, 0.00, 0.00, 0.04, 0.07, 0.11, 0.16, 0.22,
+        0.29, 0.37, 0.46, 0.55, 0.64, 0.72, 0.79, 0.85, 0.90, 0.93,
+        0.95, 0.97, 0.98, 0.99, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,
+    ]
+    # Tier 2: arriving later, still growing
+    GROWING = [
+        0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.02,
+        0.04, 0.07, 0.11, 0.16, 0.22, 0.30, 0.38, 0.47, 0.56, 0.65,
+        0.73, 0.80, 0.86, 0.90, 0.93, 0.95, 0.97, 0.98, 0.99, 1.00,
+    ]
+    # Tier 3: outer ring, just arriving
+    EMERGING = [
+        0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,
+        0.00, 0.00, 0.00, 0.00, 0.01, 0.02, 0.04, 0.07, 0.11, 0.16,
+        0.22, 0.30, 0.39, 0.48, 0.57, 0.65, 0.72, 0.78, 0.84, 0.89,
+    ]
+    # Tier 4: background US — low flat baseline
+    BACKGROUND = [0.15] * 30
+
+    CURVES = [EXPLOSIVE, RAPID, GROWING, EMERGING, BACKGROUND]
+    # Sick rates by tier
+    SICK_RATES = [0.82, 0.74, 0.65, 0.55, 0.18]
+
+    def base_daily(pop):
+        if pop > 1_000_000: return 14
+        if pop > 500_000:   return 9
+        if pop > 200_000:   return 6
+        if pop > 100_000:   return 4
+        return 2
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    today = datetime.now().date()
+    inserted = 0
+
+    all_counties = NE_COUNTIES + BACKGROUND_COUNTIES
+
+    for (fips, county_name, state, pop, tier, _) in all_counties:
+        curve   = CURVES[tier]
+        sr      = SICK_RATES[tier]
+        base    = base_daily(pop)
+        is_epicentre = tier <= 1
+        symp_pool = symptom_pools_respiratory if tier <= 2 else symptom_pools_mild
+
+        for day_offset, multiplier in enumerate(curve):
+            if multiplier == 0.00:
+                continue
+            day = today - timedelta(days=(29 - day_offset))
+            dow_factor = 0.82 if day.weekday() >= 5 else 1.0
+            total_today = max(1, round(base * multiplier * dow_factor))
+            sick_today    = max(0, round(total_today * sr))
+            healthy_today = max(0, total_today - sick_today)
+
+            for feeling, count in [("sick", sick_today), ("healthy", healthy_today)]:
+                for _ in range(count):
+                    hour   = random.randint(6, 22)
+                    minute = random.randint(0, 59)
+                    ts = datetime.combine(day, datetime.min.time()).replace(
+                        hour=hour, minute=minute
+                    )
+                    symptoms = random.choice(symp_pool) if feeling == "sick" else []
+                    age  = random.choice(age_groups)
+                    hh   = random.randint(1, 5)
+                    sick_hh = random.randint(1, min(hh, 3)) if feeling == "sick" and tier <= 1 else (
+                        random.randint(0, min(hh - 1, 2)) if feeling == "sick" else 0
+                    )
+                    recent_travel = 1 if (is_epicentre and random.random() < 0.4) else (
+                        1 if (tier == 2 and random.random() < 0.25) else 0
+                    )
+                    c.execute('''
+                        INSERT INTO reports (
+                            timestamp, zip_code, county, feeling, symptoms, age_group,
+                            household_members, sick_household_members,
+                            first_time_reporting, recent_travel, event_attendance,
+                            animal_contact, sick_animals, water_concerns,
+                            reporting_to_authority, is_demo, fips
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                    ''', (
+                        ts.isoformat(), fips, county_name, feeling,
+                        json.dumps(symptoms), age, hh, sick_hh,
+                        random.randint(0, 1),
+                        recent_travel,
+                        1 if (tier <= 1 and random.random() < 0.35) else 0,
+                        0, 0, 0,
+                        1 if (tier <= 2 and random.random() < 0.4) else 0,
                         fips,
                     ))
                     inserted += 1

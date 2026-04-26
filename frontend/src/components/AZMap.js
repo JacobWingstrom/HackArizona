@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { getCommunityRisk } from '../api';
 
 const RISK_COLORS = {
-  high:   '#ff4757',
-  medium: '#ffa502',
-  low:    '#2ed573',
+  high:   '#DC2626',
+  medium: '#D97706',
+  low:    '#059669',
 };
 
 // Simplified AZ county paths (SVG viewBox 0 0 500 400)
@@ -73,7 +73,7 @@ export default function AZMap() {
           fontSize: '0.85rem',
         }}>
           <strong>{hovered} County</strong> —{' '}
-          <span style={{ color: RISK_COLORS[hInfo.risk_level] || '#6b7a99' }}>
+          <span style={{ color: RISK_COLORS[hInfo.risk_level] || '#6B7280' }}>
             {hInfo.risk_level?.toUpperCase()} RISK
           </span>
           {' '}· {hInfo.report_count} reports in 72h
@@ -85,7 +85,7 @@ export default function AZMap() {
         <svg viewBox="0 0 500 410" xmlns="http://www.w3.org/2000/svg">
           {Object.entries(COUNTY_PATHS).map(([county, path]) => {
             const info = riskData[county];
-            const fill = info ? RISK_COLORS[info.risk_level] : '#1f2d45';
+            const fill = info ? RISK_COLORS[info.risk_level] : '#E5E7EB';
             const label = COUNTY_LABELS[county];
             return (
               <g key={county}>
@@ -93,7 +93,7 @@ export default function AZMap() {
                   d={path}
                   fill={fill}
                   fillOpacity={hovered === county ? 0.9 : 0.5}
-                  stroke="#080e1a"
+                  stroke="#FFFFFF"
                   strokeWidth={1.5}
                   className="county-path"
                   onMouseEnter={() => setHovered(county)}
@@ -103,7 +103,7 @@ export default function AZMap() {
                   <text
                     x={label[0]} y={label[1]}
                     textAnchor="middle"
-                    fill="#e8f0fe"
+                    fill="#374151"
                     fontSize={county.length > 7 ? 7 : 9}
                     fontWeight="600"
                     style={{ pointerEvents: 'none' }}

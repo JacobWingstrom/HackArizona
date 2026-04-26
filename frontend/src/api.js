@@ -61,3 +61,23 @@ export const getUSMap = async () => {
   const r = await axios.get('/api/us-map');
   return r.data;
 };
+
+export const getTravelFlow = async (fips) => {
+  const r = await axios.get(`/api/travel-flow/${fips}`);
+  return r.data;
+};
+
+export const getCountyDetail = async (fips) => {
+  const r = await axios.get(`/api/county-detail/${fips}`);
+  return r.data;
+};
+
+export const getAIResult = async (jobId) => {
+  const r = await axios.get(`/api/ai-result/${jobId}`);
+  return r.data;
+};
+
+export const getOutbreakPrediction = async (fips) => {
+  const r = await axios.get(`/api/outbreak-prediction/${fips}`);
+  return r.data;
+};
