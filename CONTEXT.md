@@ -1,5 +1,5 @@
 # CommunityPulse — AI Handoff Context File
-# Last updated: post-session (Gemma/Ollama migration, national app, county picker, enhanced results)
+# Last updated: post-session (light clinical theme redesign, New England demo scenario)
 # Purpose: Any AI continuing this build should read this file first.
 
 ---
@@ -27,18 +27,20 @@
 - [x] ElevenLabs live (voice TTS)
 - [x] SQLite DB — empty (no synthetic data)
 - [x] Demo mode — seed/clear ~500 realistic US county reports via UI button
+- [x] New England epidemic demo — separate "🦠 Load NE Outbreak" button seeds a realistic multi-state outbreak scenario (CT, MA, RI, ME, NH, VT) with elevated sick rates, cluster flags, and elevated trend data
 - [x] User accounts (register/login/JWT auth)
 - [x] Friends list (add/remove by username)
 - [x] Streak leaderboard (friends ranked by streak)
 - [x] Profile page (stats: streak, best streak, check-ins, healthy %, county, rank)
 - [x] Server-side streak tracking (linked to user_id on reports)
 - [x] CORS fixed via React proxy (package.json → `"proxy": "http://localhost:5001"`)
-- [x] US county map (react-simple-maps, color by sick rate, travel-flow arcs on hover)
+- [x] US county map (react-simple-maps, pastel risk fills, travel-flow arcs on hover)
 - [x] County detail panel (click any county → Gemma synthesized risk + symptoms + travel + weather + external surveillance)
 - [x] One Health minimum dataset form (EpiHack standard — all exposure/severity/environmental fields)
 - [x] County picker (searchable autocomplete over all 3,221 US counties, replaces zip code input)
 - [x] National app — no AZ defaults anywhere; CDC region, neighbor spread, prompts all state-aware
 - [x] Enhanced results dashboard — county detail, self-care tips, structured recommendations, surveillance data
+- [x] Light clinical theme — full dark→light redesign (IBM Plex Sans/Mono, off-white bg, navy/teal palette)
 - [ ] Epicore API base URL (pending — goes live at event May 18)
 - [ ] BEACON API (pending — DNS not resolving yet)
 - [ ] Deploy (Vercel + Railway)
@@ -321,6 +323,51 @@ Everything is state/region-aware:
 
 ---
 
+## Design System (Light Clinical Theme)
+Fonts loaded via Google Fonts: `IBM Plex Sans` (400/500/600/700 + italic) + `IBM Plex Mono` (400/500/700).
+
+### CSS Variables (index.css :root)
+```
+--bg:           #F7F9FB    off-white page background
+--surface:      #FFFFFF    card / panel background
+--surface-2:    #F0F4F8    nested card bg, input bg
+--border:       #E5E7EB    standard border
+--primary:      #2C5282    navy blue — primary buttons, active states
+--accent:       #2A9D8F    teal — secondary actions, highlights
+--orange:       #F59E0B    amber — streak badges
+--red:          #DC2626    danger
+--green:        #059669    success / low risk
+--yellow:       #D97706    moderate risk
+--text:         #1F2937    primary text
+--text-2:       #374151    secondary text
+--muted:        #6B7280    muted text
+--muted-2:      #9CA3AF    very muted
+--font-display: 'IBM Plex Sans', sans-serif
+--font-body:    'IBM Plex Sans', sans-serif
+--font-mono:    'IBM Plex Mono', monospace
+--shadow-card:  0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)
+```
+
+### Risk Color Mapping
+| Level | Text | Background | Border |
+|---|---|---|---|
+| low | #059669 | #F0FDF4 | rgba(5,150,105,0.25) |
+| medium | #D97706 | #FFFBEB | rgba(217,119,6,0.25) |
+| high | #EA580C | #FFF7ED | rgba(234,88,12,0.25) |
+| severe/critical | #DC2626 | #FEF2F2 | rgba(220,38,38,0.25) |
+
+### US Map Fill Colors (pastel — getRiskColor in USMapScreen.js)
+| State | Fill |
+|---|---|
+| No data | #F1F5F9 |
+| All healthy | #D1FAE5 |
+| Low risk (<25%) | #A7F3D0 |
+| Moderate (<50%) | #FDE68A |
+| High (<75%) | #FDBA74 |
+| Severe (≥75%) | #FCA5A5 |
+
+---
+
 ## Map Architecture (USMapScreen.js)
 
 ### Hover reliability fixes applied:
@@ -454,6 +501,25 @@ All backend and frontend files written and integrated.
 - Checkin response expanded: includes fluview, epicore, beacon, neighbor_spread, fips, state
 - ResultsDashboard rebuilt: full county context panel, self-care tips with category icons, structured recommendations with priority badges, all surveillance data visible
 - AIExplainer accordion restored ("How did we calculate this?" collapsed by default)
+
+### Mid-hackathon pass 5 — Claude — Light clinical theme + New England epidemic demo
+- Full dark→light theme redesign across all 15 components + index.css
+  - Fonts: IBM Plex Sans (display + body) + IBM Plex Mono — clinical, data-focused
+  - Background: #F7F9FB (off-white), surfaces: #FFFFFF, cards: subtle shadow
+  - Primary: #2C5282 (muted navy), accent: #2A9D8F (teal), text: #1F2937
+  - US map county fills: pastel risk tints (#A7F3D0 low → #FCA5A5 severe)
+  - State borders: #CBD5E1; all dark #1f2d45 borders replaced with #E5E7EB
+  - Risk banners: light tinted backgrounds (green/amber/orange/red) with colored text
+  - GemmaBadge: light blue gradient (#EFF6FF → #DBEAFE), navy text
+  - SIR chart: white bg, #F3F4F6 grid lines, colored curves (I: #DC2626, S: #059669, R: #2C5282)
+  - Header: white, border-bottom only, no glassmorphism
+  - All glowing box-shadows and electric cyan (#00f0c8) removed
+- New England epidemic demo scenario
+  - "🦠 Load NE Outbreak" button in CheckIn.js demo panel
+  - POST /api/demo/seed-ne — seeds realistic multi-county outbreak across CT, MA, RI, ME, NH, VT
+  - POST /api/demo/clear-ne — removes NE scenario rows (ne_scenario=1 tag)
+  - Elevated sick rates (35–80%), cluster flags, +45% to +90% trend data, realistic symptoms
+  - Designed to demonstrate how CommunityPulse visualizes an active regional outbreak on the US map
 
 **NEXT STEPS:**
 1. Get Epicore API base URL from organizers/Discord → add to .env
