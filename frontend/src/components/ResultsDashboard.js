@@ -5,29 +5,12 @@ import AIExplainer from './AIExplainer';
 import { getCountyDetail, getAIResult } from '../api';
 import { EpiCurve } from './CountyDetailPanel';
 import EpidemicForecast from './EpidemicForecast';
+import HealthChatbot from './HealthChatbot';
 
 const RISK_COLOR  = { low: '#059669', medium: '#D97706', high: '#EA580C', critical: '#DC2626', severe: '#DC2626' };
 const RISK_BG     = { low: '#F0FDF4', medium: '#FFFBEB', high: '#FFF7ED', critical: '#FEF2F2', severe: '#FEF2F2' };
 const PRIORITY_COLOR = { urgent: '#DC2626', high: '#EA580C', moderate: '#D97706', low: '#059669' };
 
-function GemmaBadge() {
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
-      border: '1px solid #4285f455',
-      borderRadius: 20, padding: '2px 8px',
-      fontSize: '0.62rem', fontWeight: 700,
-      color: '#1E40AF', letterSpacing: 0.3,
-      whiteSpace: 'nowrap', flexShrink: 0,
-    }}>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#4285f4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-      Gemma 4
-    </div>
-  );
-}
 
 function OpenAIBadge() {
   return (
@@ -48,27 +31,46 @@ function OpenAIBadge() {
   );
 }
 
-function Section({ title, titleColor = '#374151', badge, children, style }) {
+function Section({ title, titleColor = '#374151', badge, children, style, collapsible = false, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{
-      background: '#FFFFFF', border: '1px solid #E5E7EB',
-      borderRadius: 12, padding: '16px 18px', ...style,
+      background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 12,
+      ...(collapsible ? { overflow: 'hidden' } : { padding: '16px 18px' }),
+      ...style,
     }}>
       {title && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 12,
-        }}>
-          <div style={{
-            color: titleColor, fontSize: '0.7rem', fontWeight: 700,
-            textTransform: 'uppercase', letterSpacing: 0.8,
-          }}>
-            {title}
+        <div
+          role={collapsible ? 'button' : undefined}
+          tabIndex={collapsible ? 0 : undefined}
+          aria-expanded={collapsible ? open : undefined}
+          onClick={collapsible ? () => setOpen(o => !o) : undefined}
+          onKeyDown={collapsible ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } } : undefined}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            ...(collapsible
+              ? { padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid #E5E7EB' : 'none', userSelect: 'none' }
+              : { marginBottom: 12 }),
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ color: titleColor, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              {title}
+            </div>
+            {badge}
           </div>
-          {badge}
+          {collapsible && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transition: 'transform 0.2s', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', flexShrink: 0, marginLeft: 8 }} aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          )}
         </div>
       )}
-      {children}
+      {collapsible
+        ? <div style={{ padding: '14px 18px', display: open ? 'block' : 'none' }}>{children}</div>
+        : children
+      }
     </div>
   );
 }
@@ -174,6 +176,8 @@ function SymptomBar({ name, count, pct, max }) {
 export default function ResultsDashboard({ results, formData, setView, currentUser, setCurrentUser }) {
   const [countyDetail, setCountyDetail] = useState(null);
   const [aiData, setAiData] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [audioRevealed, setAudioRevealed] = useState(false);
   const pollRef = useRef(null);
   const server_streak = results?.server_streak ?? null;
 
@@ -248,6 +252,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
     county,
     state,
     audio_url,
+    audio_error,
     weather,
     fluview,
     neighbor_spread,
@@ -270,10 +275,55 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* Streak */}
-      {streak > 0 && (
-        <div className="streak-badge" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
-          🔥 {streak}-day streak
+      {/* Streak + Audio row */}
+      {(streak > 0 || audio_url || merged.ai_pending) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          {streak > 0 ? (
+            <div className="streak-badge" style={{ display: 'inline-flex' }}>
+              🔥 {streak}-day streak
+            </div>
+          ) : <div />}
+
+          {/* Audio button — right side */}
+          {audio_url ? (
+            audioRevealed ? (
+              <audio controls autoPlay src={audio_url} style={{ height: 32, maxWidth: 220, borderRadius: 8 }}>
+                Your browser does not support audio playback.
+              </audio>
+            ) : (
+              <button
+                onClick={() => setAudioRevealed(true)}
+                aria-label="Play audio summary"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  background: 'linear-gradient(135deg, #F0FDFA, #CCFBF1)',
+                  border: '1.5px solid #5EEAD4', borderRadius: 20,
+                  padding: '6px 12px 6px 8px', cursor: 'pointer',
+                  transition: 'box-shadow 0.15s',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 10px rgba(42,157,143,0.2)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <div aria-hidden="true" style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: '#2A9D8F', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <svg width="9" height="10" viewBox="0 0 13 14" fill="white">
+                    <path d="M1 1l11 6-11 6V1z"/>
+                  </svg>
+                </div>
+                <span style={{ color: '#0F766E', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                  Play Summary
+                </span>
+              </button>
+            )
+          ) : merged.ai_pending ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9CA3AF', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ width: 11, height: 11, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+              audio…
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -285,6 +335,40 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
         cd={cd}
         whoAlerts={who_alerts}
       />
+
+      {/* ── Chatbot Button ──────────────────────────────────────────── */}
+      <button
+        onClick={() => setChatOpen(true)}
+        aria-label="Open public health assistant chat"
+        style={{
+          width: '100%', background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
+          border: '1.5px solid #BFDBFE', borderRadius: 12, padding: '14px 18px',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
+          textAlign: 'left', marginBottom: 4,
+          transition: 'box-shadow 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(59,130,246,0.18)'; e.currentTarget.style.borderColor = '#93C5FD'; }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#BFDBFE'; }}
+      >
+        <span aria-hidden="true" style={{ fontSize: '1.3rem', flexShrink: 0 }}>💬</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: '#1E40AF', fontWeight: 700, fontSize: '0.88rem' }}>Want more info?</div>
+          <div style={{ color: '#6B7280', fontSize: '0.74rem', marginTop: 1 }}>
+            Ask a public health assistant about prevention, what to do next, and community resources
+          </div>
+        </div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93C5FD" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+
+      {chatOpen && (
+        <HealthChatbot
+          onClose={() => setChatOpen(false)}
+          formData={formData}
+          results={results}
+        />
+      )}
 
       {/* ── Risk Banner ─────────────────────────────────────────────── */}
       <div style={{
@@ -342,9 +426,9 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* ── Personalized Recommendations ────────────────────────────── */}
       {merged.ai_pending && !aiData && (
-        <Section title="What You Should Do" titleColor="#059669">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
-            <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
+        <Section title="What You Should Do" titleColor="#059669" collapsible defaultOpen={true}>
+          <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
+            <div aria-hidden="true" style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
             <span>OpenAI is analyzing your symptoms…</span>
             <OpenAIBadge />
           </div>
@@ -355,6 +439,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
           title="What You Should Do"
           titleColor="#059669"
           badge={<OpenAIBadge />}
+          collapsible defaultOpen={true}
         >
           {recommendations.map((rec, i) => (
             <div key={i} style={{
@@ -391,16 +476,16 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* ── Self-Care Tips ───────────────────────────────────────────── */}
       {merged.ai_pending && !aiData && (
-        <Section title="How to Help Yourself" titleColor="#2A9D8F">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
-            <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
+        <Section title="How to Help Yourself" titleColor="#2A9D8F" collapsible defaultOpen={true}>
+          <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem' }}>
+            <div aria-hidden="true" style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
             <span>Generating personalized self-care tips…</span>
             <OpenAIBadge />
           </div>
         </Section>
       )}
       {self_care_tips.length > 0 && (
-        <Section title="How to Help Yourself" titleColor="#2A9D8F" badge={<OpenAIBadge />}>
+        <Section title="How to Help Yourself" titleColor="#2A9D8F" badge={<OpenAIBadge />} collapsible defaultOpen={true}>
           {self_care_tips.map((item, i) => {
             const CATEGORY_ICON = {
               'symptom relief': '💊', hydration: '💧', rest: '😴',
@@ -435,7 +520,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* ── Risk Factors Flagged ─────────────────────────────────────── */}
       {risk_factors_flagged.length > 0 && risk_factors_flagged[0] !== 'No high-signal risk factors detected' && (
-        <Section title="Signals Detected" titleColor="#EA580C">
+        <Section title="Signals Detected" titleColor="#EA580C" collapsible defaultOpen={false}>
           {risk_factors_flagged.map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
               <span style={{ color: '#EA580C', fontSize: '0.72rem', marginTop: 2, flexShrink: 0 }}>▶</span>
@@ -446,30 +531,17 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
       )}
 
       {/* ── Trend Chart ──────────────────────────────────────────────── */}
-      <ForecastChart chartData={chart_data} forecast={forecast} trendPct={trend_pct} />
+      <Section title="Community Trend" titleColor="#1F2937" collapsible defaultOpen={false}>
+        <ForecastChart chartData={chart_data} forecast={forecast} trendPct={trend_pct} />
+      </Section>
 
-      {/* ── Audio ────────────────────────────────────────────────────── */}
-      {(merged.ai_pending || audio_url) && (
-        <Section title="🎧 Listen to Your Assessment" titleColor="#2A9D8F">
-          {audio_url ? (
-            <audio controls autoPlay src={audio_url} style={{ width: '100%', borderRadius: 8 }}>
-              Your browser does not support audio playback.
-            </audio>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6B7280', fontSize: '0.82rem', padding: '4px 0' }}>
-              <div style={{ width: 14, height: 14, border: '2px solid #2A9D8F', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.9s linear infinite', flexShrink: 0 }} />
-              Generating audio summary…
-            </div>
-          )}
-        </Section>
-      )}
 
       {/* ══ COUNTY CONTEXT (from county-detail API) ══════════════════ */}
       {cd && (
         <>
           {/* County AI summary */}
           {cdAi?.summary && (
-            <Section title={`${cd.county?.county} County Overview`} titleColor="#2A9D8F">
+            <Section title={`${cd.county?.county} County Overview`} titleColor="#2A9D8F" collapsible defaultOpen={true}>
               <p style={{ color: '#374151', fontSize: '0.83rem', margin: 0, lineHeight: 1.55 }}>
                 {cdAi.summary}
               </p>
@@ -482,33 +554,34 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
           )}
 
           {/* County quick stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <StatTile label="7-Day Reports"  value={cd.stats?.total ?? '—'}                                                          color="#2A9D8F" />
-            <StatTile label="Sick Rate"       value={cd.stats ? `${(cd.stats.sick_rate * 100).toFixed(0)}%` : '—'}                  color="#DC2626" />
-            <StatTile label="Week Trend"
-              value={cd.stats ? `${cd.stats.trend_pct >= 0 ? '+' : ''}${cd.stats.trend_pct}%` : '—'}
-              color={cd.stats?.trend_pct > 15 ? '#DC2626' : cd.stats?.trend_pct < -10 ? '#059669' : '#D97706'}
-            />
-          </div>
+          <Section title="County Stats" titleColor="#2A9D8F" collapsible defaultOpen={false}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <StatTile label="7-Day Reports"  value={cd.stats?.total ?? '—'}                                                          color="#2A9D8F" />
+              <StatTile label="Sick Rate"       value={cd.stats ? `${(cd.stats.sick_rate * 100).toFixed(0)}%` : '—'}                  color="#DC2626" />
+              <StatTile label="Week Trend"
+                value={cd.stats ? `${cd.stats.trend_pct >= 0 ? '+' : ''}${cd.stats.trend_pct}%` : '—'}
+                color={cd.stats?.trend_pct > 15 ? '#DC2626' : cd.stats?.trend_pct < -10 ? '#059669' : '#D97706'}
+              />
+            </div>
+          </Section>
 
           {/* Epi Curve */}
-          <EpiCurve daily30d={cd.stats?.daily_30d} />
+          <Section title="30-Day Epi Curve" titleColor="#1F2937" collapsible defaultOpen={false}>
+            <EpiCurve daily30d={cd.stats?.daily_30d} />
+          </Section>
 
           {/* SIR Outbreak Forecast */}
-          <div>
-            <div style={{ color: '#DC2626', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
-              ⚠ Epidemic Outbreak Forecast — {cd.county?.county} County
-            </div>
+          <Section title={`⚠ Epidemic Outbreak Forecast — ${cd.county?.county || ''} County`} titleColor="#DC2626" collapsible defaultOpen={false}>
             <EpidemicForecast
               fips={cd.county?.fips || results?.fips || formData?.fips}
               county={cd.county?.county}
               state={cd.county?.state}
             />
-          </div>
+          </Section>
 
           {/* Top symptoms in county */}
           {cd.symptoms?.length > 0 && (
-            <Section title="Top Symptoms in Your County (7 days)" titleColor="#1F2937">
+            <Section title="Top Symptoms in Your County (7 days)" titleColor="#1F2937" collapsible defaultOpen={false}>
               {cd.symptoms.slice(0, 6).map(s => (
                 <SymptomBar
                   key={s.name} name={s.name}
@@ -521,7 +594,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* County key drivers */}
           {cdAi?.key_drivers?.length > 0 && (
-            <Section title="County Risk Drivers" titleColor="#EA580C">
+            <Section title="County Risk Drivers" titleColor="#EA580C" collapsible defaultOpen={false}>
               {cdAi.key_drivers.map((d, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 5 }}>
                   <span style={{ color: '#EA580C', fontSize: '0.7rem', marginTop: 2, flexShrink: 0 }}>▶</span>
@@ -533,7 +606,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* County recommendations */}
           {cdAi?.recommendations?.length > 0 && (
-            <Section title="County-Level Guidance" titleColor="#059669">
+            <Section title="County-Level Guidance" titleColor="#059669" collapsible defaultOpen={false}>
               {cdAi.recommendations.map((r, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 5 }}>
                   <span style={{ color: '#059669', fontSize: '0.7rem', marginTop: 2, flexShrink: 0 }}>✓</span>
@@ -545,7 +618,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* One Health exposure factors */}
           {cd.risk_factors && Object.values(cd.risk_factors).some(v => v > 0) && (
-            <Section title="One Health Exposure Factors (County)" titleColor="#1F2937">
+            <Section title="One Health Exposure Factors (County)" titleColor="#1F2937" collapsible defaultOpen={false}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 {[
                   { key: 'recent_travel',             label: 'Recent Travel' },
@@ -572,7 +645,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* One Health: Animal Signal */}
           {cd.animal_health?.zoonotic_signal && (
-            <Section title="🐾 One Health: Animal Signal" titleColor="#D97706">
+            <Section title="🐾 One Health: Animal Signal" titleColor="#D97706" collapsible defaultOpen={false}>
               <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ color: '#D97706', fontSize: '1.3rem', fontWeight: 700 }}>{cd.animal_health.animal_contact_reports}</div>
@@ -595,7 +668,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* Neighboring county spread */}
           {cd.neighbor_spread && !cd.neighbor_spread.startsWith('No elevated') && (
-            <Section title="Neighboring County Activity" titleColor="#D97706">
+            <Section title="Neighboring County Activity" titleColor="#D97706" collapsible defaultOpen={false}>
               <div style={{ color: '#6B7280', fontSize: '0.7rem', marginBottom: 8, lineHeight: 1.4 }}>
                 Elevated illness in surrounding counties signals geographic spread risk.
               </div>
@@ -609,7 +682,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
           {/* Inbound travel risk */}
           {cd.travel?.sources?.length > 0 && (
-            <Section title="✈  Inbound Travel Illness Risk" titleColor="#D97706">
+            <Section title="✈  Inbound Travel Illness Risk" titleColor="#D97706" collapsible defaultOpen={false}>
               <div style={{ color: '#6B7280', fontSize: '0.7rem', marginBottom: 10 }}>
                 Counties with direct flights reporting active illness
               </div>
@@ -640,7 +713,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
       )}
 
       {/* ── Environmental & Surveillance ─────────────────────────────── */}
-      <Section title="Environmental &amp; Surveillance" titleColor="#2A9D8F">
+      <Section title="Environmental &amp; Surveillance" titleColor="#2A9D8F" collapsible defaultOpen={false}>
         {/* Weather row */}
         {weather && weather.temp !== 'N/A' && (
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #F3F4F6' }}>
@@ -680,7 +753,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* Neighbor spread (from checkin) when county detail not loaded */}
       {!cd && neighbor_spread && !neighbor_spread.startsWith('No elevated') && (
-        <Section title="Neighboring County Activity" titleColor="#D97706">
+        <Section title="Neighboring County Activity" titleColor="#D97706" collapsible defaultOpen={false}>
           {neighbor_spread.split('\n').map((line, i) => (
             <div key={i} style={{ color: '#374151', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 3 }}>
               {line}
@@ -691,14 +764,14 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* Wellness tip */}
       {wellness_tip && (
-        <Section title="Wellness Tip" titleColor="#059669">
+        <Section title="Wellness Tip" titleColor="#059669" collapsible defaultOpen={false}>
           <p style={{ color: '#374151', fontSize: '0.83rem', margin: 0, lineHeight: 1.5 }}>{wellness_tip}</p>
         </Section>
       )}
 
       {/* ── WHO Alerts ───────────────────────────────────────────────── */}
       {who_alerts.length > 0 && (
-        <Section title="🌐 WHO Disease Outbreak News" titleColor="#EA580C">
+        <Section title="🌐 WHO Disease Outbreak News" titleColor="#EA580C" collapsible defaultOpen={false}>
           <div style={{ color: '#6B7280', fontSize: '0.7rem', marginBottom: 10 }}>
             Active alerts from the World Health Organization relevant to your risk context
           </div>
@@ -718,7 +791,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* ── OutbreaksNearMe ───────────────────────────────────────────── */}
       {outbreaks_near_me.length > 0 && (
-        <Section title="📡 OutbreaksNearMe · Global Signals" titleColor="#D97706">
+        <Section title="📡 OutbreaksNearMe · Global Signals" titleColor="#D97706" collapsible defaultOpen={false}>
           <div style={{ color: '#6B7280', fontSize: '0.7rem', marginBottom: 10 }}>
             ProMED verified outbreak reports · same data powering outbreaksnearme.org
           </div>
@@ -747,7 +820,7 @@ export default function ResultsDashboard({ results, formData, setView, currentUs
 
       {/* ── Age distribution (from county detail) ───────────────────── */}
       {cd?.age_groups && Object.keys(cd.age_groups).length > 0 && (
-        <Section title="Age Distribution (County)" titleColor="#1F2937">
+        <Section title="Age Distribution (County)" titleColor="#1F2937" collapsible defaultOpen={false}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {Object.entries(cd.age_groups).map(([group, count]) => (
               <div key={group} style={{

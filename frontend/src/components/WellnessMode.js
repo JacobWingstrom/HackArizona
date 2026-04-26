@@ -80,16 +80,27 @@ function SectionTitle({ color = '#2A9D8F', children }) {
   );
 }
 
-export default function WellnessMode({ setView, currentUser, setCurrentUser }) {
+export default function WellnessMode({ setView, currentUser, setCurrentUser, preloadedData }) {
   const [streak, setStreak]       = useState(0);
-  const [checkinData, setCheckinData] = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [checkinData, setCheckinData] = useState(preloadedData || null);
+  const [loading, setLoading]     = useState(!preloadedData);
   const ageGroup = localStorage.getItem('cp_age_group') || 'adult';
   const campaign = CAMPAIGNS[ageGroup] || CAMPAIGNS.adult;
 
   useEffect(() => {
     const localStreak = updateStreak();
     setStreak(localStreak);
+
+    // If data was already submitted by SymptomForm, skip the extra fetch
+    if (preloadedData) {
+      if (preloadedData.server_streak != null && currentUser && setCurrentUser) {
+        setStreak(preloadedData.server_streak);
+        setCurrentUser(u => ({ ...u, streak: preloadedData.server_streak }));
+        localStorage.setItem('cp_streak', preloadedData.server_streak);
+      }
+      return;
+    }
+
     const countyRaw = localStorage.getItem('cp_county');
     let countyData = {};
     try { countyData = JSON.parse(countyRaw || 'null') || {}; } catch {}
@@ -246,6 +257,23 @@ export default function WellnessMode({ setView, currentUser, setCurrentUser }) {
           <div style={{ color: '#9CA3AF', fontSize: '0.63rem', marginTop: 10 }}>
             Source: ProMED / outbreaksnearme.org
           </div>
+        </Card>
+      )}
+
+      {/* ── Community Risk Factors ───────────────────────────────────── */}
+      {checkinData?.risk_factors_flagged?.length > 0 &&
+       checkinData.risk_factors_flagged[0] !== 'No high-signal risk factors detected' && (
+        <Card>
+          <SectionTitle color="#EA580C">⚠ Community Risk Signals</SectionTitle>
+          <div style={{ color: '#6B7280', fontSize: '0.72rem', marginBottom: 10, lineHeight: 1.4 }}>
+            Active signals detected in {county}{state ? `, ${state}` : ''} — even if you feel healthy, be aware
+          </div>
+          {checkinData.risk_factors_flagged.map((f, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: i < checkinData.risk_factors_flagged.length - 1 ? 7 : 0 }}>
+              <span style={{ color: '#EA580C', fontSize: '0.7rem', marginTop: 3, flexShrink: 0 }}>▶</span>
+              <span style={{ color: '#374151', fontSize: '0.79rem', lineHeight: 1.45 }}>{f}</span>
+            </div>
+          ))}
         </Card>
       )}
 

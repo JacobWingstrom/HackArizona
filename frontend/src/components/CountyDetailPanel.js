@@ -48,6 +48,149 @@ function Section({ title, titleColor = '#1F2937', children }) {
   );
 }
 
+function EpiCurve({ daily30d }) {
+  const [hovered, setHovered] = useState(null);
+
+  if (!daily30d?.length) return null;
+
+  const W = 320, H = 100, PAD = { top: 8, right: 8, bottom: 22, left: 32 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  // Fill gaps — ensure all 30 days are represented
+  const today = new Date();
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (29 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const byDate = {};
+  daily30d.forEach(r => { byDate[r.date] = r; });
+  const filled = days.map(date => byDate[date] || { date, sick: 0, total: 0 });
+
+  const maxSick = Math.max(...filled.map(d => d.sick), 1);
+  const barW = innerW / 30;
+
+  const isFlat = maxSick <= 2 && filled.every(d => Math.abs(d.sick - (filled[0]?.sick ?? 0)) <= 1);
+
+  if (isFlat) {
+    return (
+      <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ color: '#1F2937', fontSize: '0.73rem', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          📊 Epidemiological Curve · 30-Day Case History
+        </div>
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.2rem' }}>📉</span>
+          <div>
+            <div style={{ color: '#059669', fontSize: '0.8rem', fontWeight: 600 }}>Low Activity — Stable Baseline</div>
+            <div style={{ color: '#6B7280', fontSize: '0.7rem', marginTop: 2 }}>
+              Fewer than 3 sick reports/day over 30 days. No outbreak signal detected.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const yTicks = [0, Math.round(maxSick / 2), maxSick].filter((v, i, a) => a.indexOf(v) === i);
+
+  return (
+    <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ color: '#1F2937', fontSize: '0.73rem', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+        📊 Epidemiological Curve · 30-Day Case History
+      </div>
+      <div style={{ color: '#6B7280', fontSize: '0.66rem', marginBottom: 10 }}>
+        Daily self-reported sick cases — shape reveals outbreak phase
+      </div>
+
+      <div style={{ position: 'relative' }}>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+          {/* Y-axis ticks */}
+          {yTicks.map(v => {
+            const y = PAD.top + innerH - (v / maxSick) * innerH;
+            return (
+              <g key={v}>
+                <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
+                  stroke="#F3F4F6" strokeWidth="0.5" strokeDasharray="3,3" />
+                <text x={PAD.left - 4} y={y + 3} textAnchor="end" fill="#9CA3AF" fontSize="7">{v}</text>
+              </g>
+            );
+          })}
+
+          {/* Bars */}
+          {filled.map((d, i) => {
+            const x = PAD.left + i * barW;
+            const barH = (d.sick / maxSick) * innerH;
+            const y = PAD.top + innerH - barH;
+            const progress = i / 29; // 0 = oldest, 1 = today
+            // Color: blue (old) → red (recent)
+            const r = Math.round(44 + progress * (220 - 44));
+            const g = Math.round(193 + progress * (38 - 193));
+            const b = Math.round(253 + progress * (38 - 253));
+            const fill = `rgb(${r},${g},${b})`;
+            return (
+              <rect
+                key={d.date}
+                x={x + 0.5}
+                y={barH > 0 ? y : PAD.top + innerH - 1}
+                width={Math.max(barW - 1, 1)}
+                height={Math.max(barH, 1)}
+                fill={fill}
+                fillOpacity={hovered === i ? 1 : 0.85}
+                rx={1}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+                style={{ cursor: 'default' }}
+              />
+            );
+          })}
+
+          {/* X-axis labels: 30d ago / 2w ago / 1w ago / Today */}
+          {[0, 8, 15, 22, 29].map(i => {
+            const x = PAD.left + i * barW + barW / 2;
+            const label = i === 0 ? '30d ago' : i === 8 ? '3w' : i === 15 ? '2w' : i === 22 ? '1w' : 'Today';
+            return (
+              <text key={i} x={x} y={H - 3} textAnchor="middle" fill="#9CA3AF" fontSize="7">{label}</text>
+            );
+          })}
+        </svg>
+
+        {/* Hover tooltip */}
+        {hovered !== null && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: `${((hovered + 0.5) / 30) * 100}%`,
+            transform: 'translateX(-50%)',
+            background: '#1F2937',
+            color: '#F9FAFB',
+            fontSize: '0.65rem',
+            padding: '4px 8px',
+            borderRadius: 6,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            zIndex: 10,
+          }}>
+            {filled[hovered].date}<br />
+            {filled[hovered].sick} sick · {filled[hovered].total} total
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 10, height: 10, background: 'rgb(44,193,253)', borderRadius: 2 }} />
+          <span style={{ color: '#9CA3AF', fontSize: '0.62rem' }}>30 days ago</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 10, height: 10, background: 'rgb(220,38,38)', borderRadius: 2 }} />
+          <span style={{ color: '#9CA3AF', fontSize: '0.62rem' }}>Today</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CountyDetailPanel({ fips, onClose }) {
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -201,7 +344,69 @@ export default function CountyDetailPanel({ fips, onClose }) {
                 value={`${data.stats.trend_pct >= 0 ? '+' : ''}${data.stats.trend_pct}%`}
                 color={data.stats.trend_pct > 15 ? '#DC2626' : data.stats.trend_pct < -10 ? '#059669' : '#D97706'}
               />
+              {data.household_sar?.pct != null && (
+                <StatTile
+                  label="Household SAR"
+                  value={`${data.household_sar.pct}%`}
+                  color={data.household_sar.pct > 40 ? '#DC2626' : data.household_sar.pct > 20 ? '#D97706' : '#059669'}
+                />
+              )}
+              {data.household_sar?.pct != null && (
+                <StatTile
+                  label="Secondary Cases"
+                  value={`${data.household_sar.secondary_cases} / ${data.household_sar.exposed_contacts}`}
+                  color="#6B7280"
+                />
+              )}
             </div>
+            {data.household_sar?.pct != null && (
+              <div style={{ color: '#6B7280', fontSize: '0.65rem', marginTop: -6 }}>
+                Household Secondary Attack Rate — % of household contacts infected. Based on {data.household_sar.reports_with_data} multi-person household reports.
+              </div>
+            )}
+
+            {/* ── One Health: Animal Signal ────────────────────────────── */}
+            {data.animal_health && (
+              <div style={{
+                background: data.animal_health.zoonotic_signal ? '#FFFBEB' : '#F9FAFB',
+                border: `1px solid ${data.animal_health.zoonotic_signal ? '#D97706' : '#E5E7EB'}44`,
+                borderRadius: 10, padding: '14px 16px',
+              }}>
+                <div style={{ color: data.animal_health.zoonotic_signal ? '#D97706' : '#9CA3AF', fontSize: '0.73rem', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                  🐾 One Health: Animal Signal
+                </div>
+                {data.animal_health.zoonotic_signal ? (
+                  <>
+                    <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ color: '#D97706', fontSize: '1.3rem', fontWeight: 700 }}>{data.animal_health.animal_contact_reports}</div>
+                        <div style={{ color: '#6B7280', fontSize: '0.65rem' }}>animal contact reports</div>
+                      </div>
+                      <div style={{ width: 1, background: '#E5E7EB' }} />
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ color: data.animal_health.sick_animals_reported > 0 ? '#DC2626' : '#9CA3AF', fontSize: '1.3rem', fontWeight: 700 }}>{data.animal_health.sick_animals_reported}</div>
+                        <div style={{ color: '#6B7280', fontSize: '0.65rem' }}>sick animals reported</div>
+                      </div>
+                    </div>
+                    <div style={{ color: '#374151', fontSize: '0.76rem', lineHeight: 1.45 }}>
+                      {data.animal_health.sick_animals_reported > 0
+                        ? 'Potential zoonotic signal detected. Consider veterinary surveillance and reporting to animal health authorities.'
+                        : 'Human-animal contact reported in this county. Monitor for zoonotic transmission patterns.'}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ color: '#9CA3AF', fontSize: '0.78rem' }}>
+                    No animal exposure signals detected in recent reports.
+                  </div>
+                )}
+                <div style={{ color: '#9CA3AF', fontSize: '0.62rem', marginTop: 8 }}>
+                  One Health triad: human ↔ animal ↔ environment surveillance
+                </div>
+              </div>
+            )}
+
+            {/* ── Epidemiological Curve ────────────────────────────────── */}
+            <EpiCurve daily30d={data.stats?.daily_30d} />
 
             {/* ── Epidemic Outbreak Forecast ───────────────────────────── */}
             <div>
@@ -423,3 +628,5 @@ export default function CountyDetailPanel({ fips, onClose }) {
     </>
   );
 }
+
+export { EpiCurve };

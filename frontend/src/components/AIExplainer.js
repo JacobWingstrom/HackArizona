@@ -79,8 +79,8 @@ const AI_STEPS = [
   },
   {
     step: '3',
-    label: 'Gemma 4 analyzes the full picture',
-    detail: 'Google\'s open-weight Gemma 4 model runs locally on our server via Ollama. Your health data never leaves the network. The model applies the One Health framework — human + animal + environmental signals.',
+    label: 'Two AI models analyze the full picture',
+    detail: 'GPT-4o synthesizes your cluster verdict and recommendations using only anonymized symptom lists, county FIPS codes, and exposure flags — no names, addresses, or account identifiers. Gemma 4 runs locally via Ollama for the epidemic forecast, so that data never leaves the network at all.',
   },
   {
     step: '4',
@@ -228,7 +228,7 @@ export default function AIExplainer({ explanation, reportCount, county, whoAlert
                   {
                     icon: '🔒',
                     title: 'Your privacy is protected by design',
-                    body: 'No account required — anyone can submit anonymously. We collect county-level location only (never street address or GPS). Reports contain no name, email, phone, or device identifier. All data is aggregated before analysis — no individual report can be re-identified. AI inference runs on our local server; your health data never reaches a third-party AI provider. We do not sell, share, or monetize any data.',
+                    body: 'No individual report is ever shown to another user. Everything displayed publicly — cluster verdicts, epi curves, trend percentages — is aggregated at the county level before display, so no one can see your individual symptoms. Data sent to GPT-4o contains only anonymized symptom lists, county FIPS codes, and exposure flags — never your name, address, or account identifier. Gemma 4 runs entirely on our local server, so your health data never reaches any third-party AI provider. We collect county-level location only (never GPS or street address), and we do not sell, share, or monetize any data.',
                   },
                 ].map((item, i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
